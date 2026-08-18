@@ -33,6 +33,16 @@ In the Supabase project:
 
 Mutations still go through Next.js server actions. The migration defines tables, RLS, and Realtime publication so a later persistence adapter can map the in-memory room aggregate onto Postgres.
 
+## Production
+
+When you are ready to host a real room, run the production wizard. It walks through the Supabase project, Anonymous sign-ins, the schema migration, and a Vercel deploy. Secrets are written to gitignored `.env.local` and to Vercel Environment Variables — never committed.
+
+```bash
+./scripts/prepare-production.sh
+```
+
+You can stop with Ctrl-C and re-run; it keeps values already in `.env.local`.
+
 ## Content packs
 
 See [`content/README.md`](content/README.md). A 2–4 player sample pack ships in `content/*.json`. Grow those files for a 44-player session (11 slots per template, larger word banks). Validate without a room:
