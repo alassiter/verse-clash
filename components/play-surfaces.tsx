@@ -8,8 +8,7 @@ import { sendRevealReactionAction, sendTeamEmojiAction, sendTeamMessageAction, s
 export function Lobby(props: { view: PlayerView; roomCode: string }) {
   const players = props.view.lobby?.players ?? [];
   return (
-    <Panel>
-      <h2 className="mb-4 text-3xl font-bold">Lobby</h2>
+    <Panel tone="red" title="Lobby">
       <p className="mb-6 text-xl text-stone-600">
         Room code <span className="font-mono font-bold text-stone-900">{props.roomCode}</span>
       </p>
@@ -46,8 +45,7 @@ export function Lobby(props: { view: PlayerView; roomCode: string }) {
 
 export function PromptStage(props: { view: PlayerView }) {
   return (
-    <Panel>
-      <p className="mb-2 text-lg uppercase tracking-wide text-orange-700">Prompt</p>
+    <Panel tone="blue" title="Prompt">
       <h2 className="text-4xl font-bold leading-tight">{props.view.prompt?.text}</h2>
       {props.view.team ? (
         <p className="mt-6 text-2xl">
@@ -63,8 +61,7 @@ export function TeamRoom(props: { view: PlayerView; roomCode: string }) {
   const selection = props.view.selection;
   return (
     <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
-      <Panel>
-        <p className="mb-2 text-lg uppercase tracking-wide text-orange-700">Prompt</p>
+      <Panel tone="blue" title="Prompt">
         <h2 className="mb-8 text-4xl font-bold leading-tight">{props.view.prompt?.text}</h2>
         {selection ? (
           <>
@@ -90,7 +87,7 @@ export function TeamRoom(props: { view: PlayerView; roomCode: string }) {
           <p className="text-2xl">Wait for the next round — this one already started.</p>
         )}
       </Panel>
-      <Panel>
+      <Panel tone="green" title="Team">
         <h3 className="mb-3 text-2xl font-bold">Teammates</h3>
         <ul className="mb-6 space-y-2 text-xl">
           {props.view.teammates.map((mate) => (
@@ -146,10 +143,11 @@ export function TeamRoom(props: { view: PlayerView; roomCode: string }) {
 export function RevealStage(props: { view: PlayerView; roomCode: string }) {
   const reveal = props.view.reveal;
   return (
-    <Panel className="relative overflow-hidden text-center">
-      <p className="mb-2 text-lg uppercase tracking-wide text-orange-700">
-        Team {reveal?.teamName}
-      </p>
+    <Panel
+      tone="red"
+      title={`Team ${reveal?.teamName ?? ""}`}
+      className="relative overflow-hidden text-center"
+    >
       <div className="mx-auto max-w-3xl space-y-4 py-6">
         {reveal?.visibleSegments.map((segment, index) =>
           segment.type === "static" ? (
@@ -189,8 +187,7 @@ export function RevealStage(props: { view: PlayerView; roomCode: string }) {
 
 export function VotingBoard(props: { view: PlayerView; roomCode: string }) {
   return (
-    <Panel>
-      <h2 className="mb-6 text-3xl font-bold">Crowd Favorite</h2>
+    <Panel tone="blue" title="Crowd Favorite">
       <div className="grid gap-3 sm:grid-cols-2">
         {props.view.voting?.teams.map((team) => (
           <BigButton
@@ -207,8 +204,7 @@ export function VotingBoard(props: { view: PlayerView; roomCode: string }) {
 
 export function StandingsBoard(props: { view: PlayerView }) {
   return (
-    <Panel>
-      <h2 className="mb-6 text-3xl font-bold">Standings</h2>
+    <Panel tone="red" title="Standings">
       <ul className="space-y-3 text-3xl">
         {props.view.standings?.map((row) => (
           <li key={row.teamId}>

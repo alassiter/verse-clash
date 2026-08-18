@@ -20,14 +20,12 @@ export function HostDashboard(props: { view: HostView; roomCode: string }) {
       : `/room/${props.roomCode}`;
   return (
     <div className="grid gap-6">
-      <Panel>
-        <p className="text-lg uppercase tracking-wide text-orange-700">Room</p>
+      <Panel tone="red" title="Room">
         <p className="font-mono text-5xl font-black">{props.roomCode}</p>
         <p className="mt-2 break-all text-lg">{share}</p>
       </Panel>
       {props.view.promptPreview ? (
-        <Panel>
-          <h2 className="mb-2 text-2xl font-bold">Next prompt</h2>
+        <Panel tone="blue" title="Next prompt">
           <p className="mb-4 text-3xl">{props.view.promptPreview.text}</p>
           <div className="grid gap-2 text-lg sm:grid-cols-2">
             {props.view.promptPreview.wordPools.map((pool) => (
@@ -38,8 +36,7 @@ export function HostDashboard(props: { view: HostView; roomCode: string }) {
           </div>
         </Panel>
       ) : null}
-      <Panel>
-        <h2 className="mb-4 text-2xl font-bold">Players</h2>
+      <Panel tone="green" title="Players">
         <ul className="space-y-3">
           {props.view.players.map((player) => (
             <li key={player.id} className="flex flex-wrap items-center gap-3 text-lg">

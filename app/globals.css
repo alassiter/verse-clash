@@ -23,6 +23,7 @@
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
   --font-comic: var(--font-comic);
+  --font-script: var(--font-script);
 
   --color-comic-ink: var(--comic-ink);
   --color-comic-wood: var(--comic-wood);
