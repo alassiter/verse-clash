@@ -1,0 +1,18 @@
+[
+  {
+    "id": "three-principles",
+    "promptIds": ["vision", "toast", "keynote"],
+    "title": "Three principles",
+    "segments": [
+      { "type": "static", "text": "Our new strategic vision is built on three principles: " },
+      { "type": "slot", "slotId": "principle-adj" },
+      { "type": "static", "text": ", " },
+      { "type": "slot", "slotId": "principle-noun" },
+      { "type": "static", "text": ", and " },
+      { "type": "slot", "slotId": "principle-phrase" },
+      { "type": "static", "text": ", which we will " },
+      { "type": "slot", "slotId": "principle-verb" },
+      { "type": "static", "text": " together." }
+    ]
+  }
+]

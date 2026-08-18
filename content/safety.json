@@ -1,0 +1,5 @@
+{
+  "blockedTerms": ["blood", "sexy", "kill", "drunk"],
+  "bannedCategoryPairs": [["food", "profession"]],
+  "contentMode": "work_safe"
+}

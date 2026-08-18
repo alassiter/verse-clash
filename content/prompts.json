@@ -1,0 +1,25 @@
+[
+  {
+    "id": "vision",
+    "text": "Announce the company's new strategic vision.",
+    "tease": "Board-ready. Spiritually a waffle.",
+    "formatHint": "keynote manifesto",
+    "compatibleTemplateIds": ["three-principles"],
+    "workplaceSafe": true
+  },
+  {
+    "id": "toast",
+    "text": "Give a heartfelt toast to a beloved piece of office equipment.",
+    "tease": "Someone has to thank the printer.",
+    "formatHint": "wedding toast",
+    "compatibleTemplateIds": ["three-principles"],
+    "workplaceSafe": true
+  },
+  {
+    "id": "keynote",
+    "text": "Open the product launch keynote for a tool nobody asked for.",
+    "formatHint": "product keynote",
+    "compatibleTemplateIds": ["three-principles"],
+    "workplaceSafe": true
+  }
+]
