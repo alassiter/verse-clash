@@ -1,9 +1,11 @@
 import { AnimatedLogo } from "@/components/AnimatedLogo";
+import { BackgroundMusic } from "@/components/BackgroundMusic";
 import { HomeForm } from "@/components/HomeForm";
 
 export default function HomePage() {
   return (
     <main className="mx-auto flex min-h-full max-w-5xl flex-col justify-center px-4">
+      <BackgroundMusic />
       <div className="flex flex-col items-center text-center">
         <AnimatedLogo />
       </div>
