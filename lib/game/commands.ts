@@ -1,23 +1,13 @@
-import {
-  assembleComposition,
-  dealForTeam,
-  type ContentPack,
-  type CompositionFill,
-} from "@/lib/content";
+import { current, enter, leave, tick, type PhaseContext } from "@/lib/game/phase";
 import {
   currentRound,
-  PROMPT_REVEAL_MS,
   REVEAL_EMOJIS,
-  REVEAL_SEGMENT_MS,
-  SELECTING_MS,
   TEAM_SEEDS,
-  type AssignmentState,
   type PlayerState,
   type RoomState,
-  type RoundState,
 } from "@/lib/game/state";
 import type { Actor, RoomCommandDeps, RoomCommands } from "@/lib/game/types";
-import { hostView, playerView, roomPhase } from "@/lib/game/views";
+import { hostView, playerView } from "@/lib/game/views";
 
 export class RoomError extends Error {
   constructor(
@@ -67,201 +57,23 @@ function touch(player: PlayerState, now: number) {
   player.lastSeenAt = now;
 }
 
-function smallestTeamId(room: RoomState): string {
-  let best = room.teams[0];
-  let bestCount = Number.POSITIVE_INFINITY;
-  for (const team of room.teams) {
-    const count = room.players.filter((player) => player.teamId === team.id).length;
-    if (count < bestCount) {
-      best = team;
-      bestCount = count;
-    }
-  }
-  return best.id;
-}
-
-function upcomingPrompt(pack: ContentPack, room: RoomState) {
-  return pack.prompts[room.promptCursor % pack.prompts.length];
-}
-
-function fillUnsubmitted(round: RoundState, random: () => number, now: number) {
-  for (const assignment of round.assignments) {
-    if (assignment.submittedAt || assignment.options.length === 0) continue;
-    const index = Math.min(
-      assignment.options.length - 1,
-      Math.floor(random() * assignment.options.length),
-    );
-    assignment.selectedOptionId = assignment.options[index].id;
-    assignment.submittedAt = now;
-  }
-}
-
-function allSubmitted(round: RoundState): boolean {
-  return (
-    round.assignments.length > 0 &&
-    round.assignments.every((assignment) => assignment.submittedAt)
-  );
-}
-
-function assembleRound(
-  room: RoomState,
-  pack: ContentPack,
-  round: RoundState,
-  at: number,
-) {
-  round.phase = "assembling";
-  const teamsWithAssignments = room.teams.filter((team) =>
-    round.assignments.some((assignment) => {
-      const player = room.players.find((entry) => entry.id === assignment.playerId);
-      return player?.teamId === team.id;
-    }),
-  );
-  round.compositions = teamsWithAssignments.map((team) => {
-    const fills: CompositionFill[] = round.assignments
-      .filter((assignment) => {
-        const player = room.players.find((entry) => entry.id === assignment.playerId);
-        return player?.teamId === team.id && assignment.selectedOptionId;
-      })
-      .map((assignment) => {
-        const player = room.players.find((entry) => entry.id === assignment.playerId)!;
-        const option = assignment.options.find(
-          (entry) => entry.id === assignment.selectedOptionId,
-        )!;
-        const word = pack.words.find((entry) => entry.id === option.id);
-        return {
-          slotId: assignment.slotId,
-          text: option.text,
-          playerId: player.id,
-          displayName: player.displayName,
-          semanticCategory: word?.semanticCategory ?? "abstract",
-          bannedPairCategories: word?.bannedPairCategories,
-        };
-      });
-    return {
-      teamId: team.id,
-      segments: assembleComposition(pack, {
-        templateId: round.templateId,
-        fills,
-      }).segments,
-    };
-  });
-  round.reveal = { teamIndex: 0, segmentIndex: 0 };
-  round.phaseEndsAt = at;
-}
-
-function openReveal(round: RoundState, at: number) {
-  round.phase = "reveal";
-  round.phaseEndsAt = at + REVEAL_SEGMENT_MS;
-}
-
-function stepReveal(round: RoundState, at: number) {
-  const current = round.compositions[round.reveal.teamIndex];
-  if (!current) {
-    round.phase = "voting";
-    round.phaseEndsAt = null;
-    return;
-  }
-  if (round.reveal.segmentIndex + 1 < current.segments.length) {
-    round.reveal.segmentIndex += 1;
-    round.phaseEndsAt = at + REVEAL_SEGMENT_MS;
-    return;
-  }
-  if (round.reveal.teamIndex + 1 < round.compositions.length) {
-    round.reveal.teamIndex += 1;
-    round.reveal.segmentIndex = 0;
-    round.phaseEndsAt = at + REVEAL_SEGMENT_MS;
-    return;
-  }
-  round.phase = "voting";
-  round.phaseEndsAt = null;
-}
-
-function beginRound(room: RoomState, pack: ContentPack, deps: RoomCommandDeps) {
-  const prompt = upcomingPrompt(pack, room);
-  const templateId = prompt.compatibleTemplateIds[0];
-  const number = (currentRound(room)?.number ?? 0) + 1;
-  const seated = room.players.filter((player) => player.teamId);
-  const assignments: AssignmentState[] = [];
-  for (const team of room.teams) {
-    const members = seated.filter(
-      (player) => player.teamId === team.id && player.joinedRound <= number,
-    );
-    if (members.length === 0) continue;
-    const dealt = dealForTeam(pack, {
-      promptId: prompt.id,
-      templateId,
-      playerIds: members.map((member) => member.id),
-      random: deps.random,
-    });
-    for (const assignment of dealt) {
-      assignments.push({
-        ...assignment,
-        selectedOptionId: null,
-        submittedAt: null,
-      });
-    }
-  }
-  const round: RoundState = {
-    id: `round-${number}`,
-    number,
-    type: "straight",
-    promptId: prompt.id,
-    templateId,
-    phase: "prompt_reveal",
-    phaseEndsAt: deps.clock.now() + PROMPT_REVEAL_MS,
-    assignments,
-    compositions: [],
-    reveal: { teamIndex: 0, segmentIndex: 0 },
-    votes: [],
-    reactions: [],
-  };
-  room.rounds.push(round);
-  room.status = "in_progress";
-  room.paused = false;
-  room.pauseStartedAt = null;
-}
-
-function enterSelecting(room: RoomState, at: number) {
-  const round = currentRound(room);
-  if (!round) return;
-  round.phase = "selecting";
-  round.phaseEndsAt = at + SELECTING_MS;
-}
-
-function maybeTick(
-  room: RoomState,
-  pack: ContentPack,
-  random: () => number,
-  at: number,
-) {
-  if (room.paused) return;
-  const round = currentRound(room);
-  if (!round) return;
-  if (round.phase === "assembling") {
-    openReveal(round, at);
-    return;
-  }
-  if (round.phaseEndsAt === null || at < round.phaseEndsAt) return;
-  if (round.phase === "prompt_reveal") {
-    enterSelecting(room, at);
-    return;
-  }
-  if (round.phase === "selecting") {
-    fillUnsubmitted(round, random, at);
-    assembleRound(room, pack, round, at);
-    openReveal(round, at);
-    return;
-  }
-  if (round.phase === "reveal") {
-    stepReveal(round, at);
-  }
-}
-
 export function createRoomCommands(deps: RoomCommandDeps): RoomCommands {
   const rooms = new Map<string, RoomState>();
   const pack = deps.pack;
   const now = () => deps.clock.now();
   let codeSerial = 0;
+
+  const ctxFor = (at: number): PhaseContext => ({
+    pack,
+    random: deps.random,
+    now: at,
+  });
+
+  const roomAfterTick = (roomCode: string): RoomState => {
+    const room = requireRoom(rooms, roomCode);
+    tick(room, ctxFor(now()));
+    return room;
+  };
 
   const commands: RoomCommands = {
     createRoom(actor, input) {
@@ -301,7 +113,7 @@ export function createRoomCommands(deps: RoomCommandDeps): RoomCommands {
     },
 
     joinRoom(actor, input) {
-      const room = requireRoom(rooms, input.code);
+      const room = roomAfterTick(input.code);
       const existing = room.players.find((player) => player.id === actor.id);
       if (existing) {
         touch(existing, now());
@@ -309,11 +121,13 @@ export function createRoomCommands(deps: RoomCommandDeps): RoomCommands {
       }
       const round = currentRound(room);
       const joinedRound =
-        round && room.status === "in_progress" ? round.number + 1 : 0;
+        round && current(room) !== "gathering" && current(room) !== "ended"
+          ? round.number + 1
+          : 0;
       room.players.push({
         id: actor.id,
         displayName: input.displayName,
-        teamId: smallestTeamId(room),
+        teamId: null,
         isHost: false,
         isReady: false,
         lastSeenAt: now(),
@@ -323,33 +137,30 @@ export function createRoomCommands(deps: RoomCommandDeps): RoomCommands {
 
     getPlayerView(actor, roomCode) {
       const room = requireRoom(rooms, roomCode);
-      maybeTick(room, pack, deps.random, now());
       return playerView(room, requirePlayer(room, actor), pack);
     },
 
     getHostView(actor, roomCode) {
       const room = requireRoom(rooms, roomCode);
-      maybeTick(room, pack, deps.random, now());
       return hostView(room, requireHost(room, actor), pack, now());
     },
 
     heartbeat(actor, roomCode) {
-      const room = requireRoom(rooms, roomCode);
-      maybeTick(room, pack, deps.random, now());
+      const room = roomAfterTick(roomCode);
       touch(requirePlayer(room, actor), now());
     },
 
     setReady(actor, roomCode, ready) {
-      const room = requireRoom(rooms, roomCode);
+      const room = roomAfterTick(roomCode);
       const player = requirePlayer(room, actor);
       player.isReady = ready;
       touch(player, now());
     },
 
     shuffleTeams(actor, roomCode) {
-      const room = requireRoom(rooms, roomCode);
+      const room = roomAfterTick(roomCode);
       requireHost(room, actor);
-      const seated = room.players.filter((player) => player.teamId);
+      const seated = room.players.filter((player) => player.teamId && !player.isHost);
       for (let i = seated.length - 1; i > 0; i -= 1) {
         const j = Math.floor(deps.random() * (i + 1));
         [seated[i], seated[j]] = [seated[j], seated[i]];
@@ -360,11 +171,14 @@ export function createRoomCommands(deps: RoomCommandDeps): RoomCommands {
     },
 
     movePlayer(actor, roomCode, playerId, teamId) {
-      const room = requireRoom(rooms, roomCode);
+      const room = roomAfterTick(roomCode);
       requireHost(room, actor);
       const player = room.players.find((entry) => entry.id === playerId);
       if (!player) {
         throw new RoomError("not_in_room", "That player is not in this room.");
+      }
+      if (player.isHost && teamId) {
+        throw new RoomError("host_cannot_play", "The host cannot join a team.");
       }
       if (teamId && !room.teams.some((team) => team.id === teamId)) {
         throw new RoomError("bad_team", "Unknown team.");
@@ -372,26 +186,20 @@ export function createRoomCommands(deps: RoomCommandDeps): RoomCommands {
       player.teamId = teamId;
     },
 
-    skipPrompt(actor, roomCode) {
-      const room = requireRoom(rooms, roomCode);
-      requireHost(room, actor);
-      room.promptCursor = (room.promptCursor + 1) % pack.prompts.length;
-    },
-
     startRound(actor, roomCode) {
-      const room = requireRoom(rooms, roomCode);
+      const room = roomAfterTick(roomCode);
       requireHost(room, actor);
-      if (room.status !== "lobby") {
+      if (current(room) !== "gathering") {
         throw new RoomError("wrong_phase", "Start the next round from standings.");
       }
-      beginRound(room, pack, deps);
+      leave(room, ctxFor(now()));
     },
 
     submitChoice(actor, roomCode, optionId) {
-      const room = requireRoom(rooms, roomCode);
+      const room = roomAfterTick(roomCode);
       const player = requirePlayer(room, actor);
       const round = currentRound(room);
-      if (!round || round.phase !== "selecting") {
+      if (!round || current(room) !== "selecting") {
         throw new RoomError("wrong_phase", "Selection is not open.");
       }
       const assignment = round.assignments.find(
@@ -409,13 +217,16 @@ export function createRoomCommands(deps: RoomCommandDeps): RoomCommands {
       assignment.selectedOptionId = optionId;
       assignment.submittedAt = now();
       touch(player, now());
-      if (allSubmitted(round)) {
-        assembleRound(room, pack, round, now());
+      if (
+        round.assignments.length > 0 &&
+        round.assignments.every((entry) => entry.submittedAt)
+      ) {
+        leave(room, ctxFor(now()));
       }
     },
 
     sendTeamMessage(actor, roomCode, body) {
-      const room = requireRoom(rooms, roomCode);
+      const room = roomAfterTick(roomCode);
       const player = requirePlayer(room, actor);
       if (!player.teamId) {
         throw new RoomError("no_team", "Join a team to chat.");
@@ -432,7 +243,7 @@ export function createRoomCommands(deps: RoomCommandDeps): RoomCommands {
     },
 
     pause(actor, roomCode) {
-      const room = requireRoom(rooms, roomCode);
+      const room = roomAfterTick(roomCode);
       requireHost(room, actor);
       if (room.paused) return;
       room.paused = true;
@@ -440,7 +251,7 @@ export function createRoomCommands(deps: RoomCommandDeps): RoomCommands {
     },
 
     resume(actor, roomCode) {
-      const room = requireRoom(rooms, roomCode);
+      const room = roomAfterTick(roomCode);
       requireHost(room, actor);
       if (!room.paused) return;
       const round = currentRound(room);
@@ -452,44 +263,24 @@ export function createRoomCommands(deps: RoomCommandDeps): RoomCommands {
       room.pauseStartedAt = null;
     },
 
-    forceAdvance(actor, roomCode) {
-      const room = requireRoom(rooms, roomCode);
+    endRound(actor, roomCode) {
+      const room = roomAfterTick(roomCode);
       requireHost(room, actor);
-      const round = currentRound(room);
-      const phase = roomPhase(room);
-      if (phase === "prompt_reveal") {
-        enterSelecting(room, now());
-        return;
+      const phase = current(room);
+      if (phase === "gathering" || phase === "standings" || phase === "ended") {
+        throw new RoomError("wrong_phase", "There is no round to end.");
       }
-      if (phase === "selecting" && round) {
-        fillUnsubmitted(round, deps.random, now());
-        assembleRound(room, pack, round, now());
-        return;
-      }
-      if (phase === "assembling" && round) {
-        openReveal(round, now());
-        return;
-      }
-      if (phase === "reveal" && round) {
-        stepReveal(round, now());
-      }
-    },
-
-    advanceReveal(actor, roomCode) {
-      const room = requireRoom(rooms, roomCode);
-      requireHost(room, actor);
-      const round = currentRound(room);
-      if (!round || round.phase !== "reveal") {
-        throw new RoomError("wrong_phase", "Reveal is not active.");
-      }
-      stepReveal(round, now());
+      enter(room, ctxFor(now()), "standings");
     },
 
     sendRevealReaction(actor, roomCode, emoji) {
-      const room = requireRoom(rooms, roomCode);
+      const room = roomAfterTick(roomCode);
       const player = requirePlayer(room, actor);
+      if (current(room) !== "reveal") {
+        throw new RoomError("wrong_phase", "Reactions are for the reveal.");
+      }
       const round = currentRound(room);
-      if (!round || round.phase !== "reveal") {
+      if (!round) {
         throw new RoomError("wrong_phase", "Reactions are for the reveal.");
       }
       if (!REVEAL_EMOJIS.includes(emoji as (typeof REVEAL_EMOJIS)[number])) {
@@ -499,10 +290,10 @@ export function createRoomCommands(deps: RoomCommandDeps): RoomCommands {
     },
 
     vote(actor, roomCode, teamId) {
-      const room = requireRoom(rooms, roomCode);
+      const room = roomAfterTick(roomCode);
       const player = requirePlayer(room, actor);
       const round = currentRound(room);
-      if (!round || round.phase !== "voting") {
+      if (!round || current(room) !== "voting") {
         throw new RoomError("wrong_phase", "Voting is not open.");
       }
       if (!room.teams.some((team) => team.id === teamId)) {
@@ -514,49 +305,19 @@ export function createRoomCommands(deps: RoomCommandDeps): RoomCommands {
       round.votes.push({ playerId: player.id, teamId });
     },
 
-    closeVoting(actor, roomCode) {
-      const room = requireRoom(rooms, roomCode);
-      requireHost(room, actor);
-      const round = currentRound(room);
-      if (!round || round.phase !== "voting") {
-        throw new RoomError("wrong_phase", "Voting is not open.");
-      }
-      const counts = new Map<string, number>();
-      for (const vote of round.votes) {
-        counts.set(vote.teamId, (counts.get(vote.teamId) ?? 0) + 1);
-      }
-      let best = 0;
-      for (const count of counts.values()) {
-        best = Math.max(best, count);
-      }
-      if (best > 0) {
-        for (const team of room.teams) {
-          if ((counts.get(team.id) ?? 0) === best) {
-            team.wins += 1;
-          }
-        }
-      }
-      round.phase = "standings";
-      room.promptCursor = (room.promptCursor + 1) % pack.prompts.length;
-    },
-
     startNextRound(actor, roomCode) {
-      const room = requireRoom(rooms, roomCode);
+      const room = roomAfterTick(roomCode);
       requireHost(room, actor);
-      if (roomPhase(room) !== "standings") {
+      if (current(room) !== "standings") {
         throw new RoomError("wrong_phase", "Finish the current round first.");
       }
-      beginRound(room, pack, deps);
+      leave(room, ctxFor(now()));
     },
 
     endGame(actor, roomCode) {
-      const room = requireRoom(rooms, roomCode);
+      const room = roomAfterTick(roomCode);
       requireHost(room, actor);
-      room.status = "ended";
-      const round = currentRound(room);
-      if (round) {
-        round.phase = "ended";
-      }
+      enter(room, ctxFor(now()), "ended");
     },
   };
 

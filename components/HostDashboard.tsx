@@ -2,15 +2,12 @@
 
 import type { HostView } from "@/lib/game";
 import {
-  advanceRevealAction,
-  closeVotingAction,
   endGameAction,
-  forceAdvanceAction,
+  endRoundAction,
   movePlayerAction,
   pauseAction,
   resumeAction,
   shuffleTeamsAction,
-  skipPromptAction,
   startNextRoundAction,
   startRoundAction,
 } from "@/app/actions/room";
@@ -52,32 +49,33 @@ export function HostDashboard(props: { view: HostView; roomCode: string }) {
                 {player.disconnected ? " · dropped?" : ""}
               </span>
               <span>{player.isReady ? "ready" : "not ready"}</span>
-              <select
-                className="rounded-xl border border-stone-300 px-2 py-2"
-                value={player.teamName ?? ""}
-                onChange={(event) => {
-                  const name = event.target.value;
-                  const team = props.view.teams.find((entry) => entry.name === name);
-                  void movePlayerAction(props.roomCode, player.id, team?.id ?? null);
-                }}
-              >
-                <option value="">Off-team</option>
-                {props.view.teams.map((team) => (
-                  <option key={team.id} value={team.name}>
-                    {team.name}
-                  </option>
-                ))}
-              </select>
+              {player.isHost ? (
+                <span className="text-stone-500">no team</span>
+              ) : (
+                <select
+                  className="rounded-xl border border-stone-300 px-2 py-2"
+                  value={player.teamName ?? ""}
+                  onChange={(event) => {
+                    const name = event.target.value;
+                    const team = props.view.teams.find((entry) => entry.name === name);
+                    void movePlayerAction(props.roomCode, player.id, team?.id ?? null);
+                  }}
+                >
+                  <option value="">Off-team</option>
+                  {props.view.teams.map((team) => (
+                    <option key={team.id} value={team.name}>
+                      {team.name}
+                    </option>
+                  ))}
+                </select>
+              )}
             </li>
           ))}
         </ul>
       </Panel>
       <Panel className="flex flex-wrap gap-3">
-        {props.view.phase === "lobby" ? (
+        {props.view.phase === "gathering" ? (
           <>
-            <BigButton onClick={() => void skipPromptAction(props.roomCode)} tone="ghost">
-              Skip prompt
-            </BigButton>
             <BigButton onClick={() => void shuffleTeamsAction(props.roomCode)} tone="ghost">
               Shuffle teams
             </BigButton>
@@ -95,27 +93,21 @@ export function HostDashboard(props: { view: HostView; roomCode: string }) {
                 Pause
               </BigButton>
             )}
-            <BigButton onClick={() => void forceAdvanceAction(props.roomCode)}>
-              {props.view.phase === "prompt_reveal" ? "Begin choosing" : "Force-advance"}
-            </BigButton>
           </>
-        ) : null}
-        {props.view.phase === "reveal" ? (
-          <BigButton onClick={() => void advanceRevealAction(props.roomCode)}>
-            Next beat
-          </BigButton>
-        ) : null}
-        {props.view.phase === "voting" ? (
-          <BigButton onClick={() => void closeVotingAction(props.roomCode)}>
-            Show standings
-          </BigButton>
         ) : null}
         {props.view.phase === "standings" ? (
           <BigButton onClick={() => void startNextRoundAction(props.roomCode)}>
             Next round
           </BigButton>
         ) : null}
-        {props.view.phase !== "ended" && props.view.phase !== "lobby" ? (
+        {props.view.phase !== "ended" &&
+        props.view.phase !== "gathering" &&
+        props.view.phase !== "standings" ? (
+          <BigButton onClick={() => void endRoundAction(props.roomCode)} tone="ghost">
+            End this round
+          </BigButton>
+        ) : null}
+        {props.view.phase !== "ended" && props.view.phase !== "gathering" ? (
           <BigButton tone="danger" onClick={() => void endGameAction(props.roomCode)}>
             End game
           </BigButton>

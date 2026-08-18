@@ -54,3 +54,47 @@ export function openLobby(commands: RoomCommands): string {
   return created.roomCode;
 }
 
+export function enterSelecting(
+  commands: RoomCommands,
+  advanceTime: (ms: number) => void,
+  roomCode: string,
+) {
+  commands.startRound(host, roomCode);
+  advanceTime(12_001);
+  commands.heartbeat(host, roomCode);
+}
+
+export function playThroughSelection(
+  commands: RoomCommands,
+  advanceTime: (ms: number) => void,
+) {
+  const roomCode = openLobby(commands);
+  const goblin = commands
+    .getHostView(host, roomCode)
+    .teams.find((team) => team.id === "goblin");
+  if (!goblin) throw new Error("missing Goblin");
+  commands.movePlayer(host, roomCode, priya.id, goblin.id);
+  commands.movePlayer(host, roomCode, sam.id, goblin.id);
+  enterSelecting(commands, advanceTime, roomCode);
+  for (const actor of [priya, sam, lee]) {
+    const optionId = commands.getPlayerView(actor, roomCode).selection!.options[0].id;
+    commands.submitChoice(actor, roomCode, optionId);
+  }
+  return roomCode;
+}
+
+export function reachVoting(
+  commands: RoomCommands,
+  advanceTime: (ms: number) => void,
+) {
+  const roomCode = playThroughSelection(commands, advanceTime);
+  for (let i = 0; i < 80; i += 1) {
+    if (commands.getPlayerView(priya, roomCode).phase === "voting") {
+      return roomCode;
+    }
+    advanceTime(4_001);
+    commands.heartbeat(host, roomCode);
+  }
+  throw new Error("did not reach voting");
+}
+

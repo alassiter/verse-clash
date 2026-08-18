@@ -109,15 +109,6 @@ export async function movePlayerAction(
   }
 }
 
-export async function skipPromptAction(roomCode: string) {
-  try {
-    getRoomCommands().skipPrompt(await actorFromCookies(), roomCode);
-    return { ok: true as const };
-  } catch (error) {
-    return fail(error);
-  }
-}
-
 export async function startRoundAction(roomCode: string) {
   try {
     getRoomCommands().startRound(await actorFromCookies(), roomCode);
@@ -172,18 +163,9 @@ export async function resumeAction(roomCode: string) {
   }
 }
 
-export async function forceAdvanceAction(roomCode: string) {
+export async function endRoundAction(roomCode: string) {
   try {
-    getRoomCommands().forceAdvance(await actorFromCookies(), roomCode);
-    return { ok: true as const };
-  } catch (error) {
-    return fail(error);
-  }
-}
-
-export async function advanceRevealAction(roomCode: string) {
-  try {
-    getRoomCommands().advanceReveal(await actorFromCookies(), roomCode);
+    getRoomCommands().endRound(await actorFromCookies(), roomCode);
     return { ok: true as const };
   } catch (error) {
     return fail(error);
@@ -202,15 +184,6 @@ export async function sendRevealReactionAction(roomCode: string, emoji: string) 
 export async function voteAction(roomCode: string, teamId: string) {
   try {
     getRoomCommands().vote(await actorFromCookies(), roomCode, teamId);
-    return { ok: true as const };
-  } catch (error) {
-    return fail(error);
-  }
-}
-
-export async function closeVotingAction(roomCode: string) {
-  try {
-    getRoomCommands().closeVoting(await actorFromCookies(), roomCode);
     return { ok: true as const };
   } catch (error) {
     return fail(error);

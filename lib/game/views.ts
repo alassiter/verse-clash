@@ -1,5 +1,6 @@
 import type { ContentPack } from "@/lib/content";
 import { slotsForTemplate } from "@/lib/content/deal";
+import { current } from "@/lib/game/phase";
 import {
   currentRound,
   DISCONNECT_AFTER_MS,
@@ -12,10 +13,9 @@ const PHASE_COPY: Record<
   PlayerView["phase"],
   { name: string; instruction: string }
 > = {
-  lobby: { name: "Lobby", instruction: "Waiting for the host to start" },
+  gathering: { name: "Gathering", instruction: "Waiting for the host to start" },
   prompt_reveal: { name: "Prompt", instruction: "Read the shared prompt" },
   selecting: { name: "Selecting", instruction: "Choose one option" },
-  assembling: { name: "Assembling", instruction: "The piece is coming together" },
   reveal: { name: "Reveal", instruction: "Watch the shared stage" },
   voting: { name: "Voting", instruction: "Pick a Crowd Favorite" },
   standings: { name: "Standings", instruction: "See which team is ahead" },
@@ -33,12 +33,11 @@ function teammates(
 ): TeammateView[] {
   if (!player.teamId) return [];
   const round = currentRound(room);
+  const phase = current(room);
   const hideWords =
-    !round ||
-    round.phase === "lobby" ||
-    round.phase === "prompt_reveal" ||
-    round.phase === "selecting" ||
-    round.phase === "assembling";
+    phase === "gathering" ||
+    phase === "prompt_reveal" ||
+    phase === "selecting";
   return room.players
     .filter((mate) => mate.teamId === player.teamId)
     .map((mate) => {
@@ -69,7 +68,8 @@ export function playerView(
   player: PlayerState,
   pack: ContentPack,
 ): PlayerView {
-  const copy = PHASE_COPY[roomPhase(room)];
+  const phase = current(room);
+  const copy = PHASE_COPY[phase];
   const team = teamById(room, player.teamId);
   const round = currentRound(room);
   const prompt = round
@@ -80,14 +80,14 @@ export function playerView(
   );
   const waitingForNextRound = Boolean(
     round &&
-      round.phase !== "lobby" &&
-      round.phase !== "ended" &&
+      phase !== "gathering" &&
+      phase !== "ended" &&
       player.joinedRound > round.number &&
       !assignment,
   );
   const mateViews = teammates(room, player);
   const view: PlayerView = {
-    phase: roomPhase(room),
+    phase,
     phaseName: copy.name,
     instruction: copy.instruction,
     roomCode: room.code,
@@ -113,7 +113,7 @@ export function playerView(
     waitingForNextRound: waitingForNextRound || undefined,
   };
 
-  if (view.phase === "lobby") {
+  if (view.phase === "gathering") {
     view.lobby = {
       players: room.players.map((entry) => ({
         displayName: entry.displayName,
@@ -124,7 +124,7 @@ export function playerView(
     };
   }
 
-  if (prompt && view.phase !== "lobby") {
+  if (prompt && view.phase !== "gathering") {
     view.prompt = {
       text: prompt.text,
       tease: prompt.tease,
@@ -132,7 +132,7 @@ export function playerView(
     };
   }
 
-  if (assignment) {
+  if (assignment && phase !== "gathering" && phase !== "prompt_reveal") {
     view.selection = {
       playerLabel: assignment.playerLabel,
       options: assignment.options,
@@ -145,16 +145,16 @@ export function playerView(
     view.teamChatPrimary = false;
   }
 
-  if (round && (view.phase === "reveal" || view.phase === "assembling")) {
+  if (round && view.phase === "reveal") {
     const compositions = round.compositions;
-    const current = compositions[round.reveal.teamIndex] ?? compositions[0];
+    const shown = compositions[round.reveal.teamIndex] ?? compositions[0];
     const teamName =
-      room.teams.find((entry) => entry.id === current?.teamId)?.name ?? "";
-    const visible = current?.segments.slice(0, round.reveal.segmentIndex + 1) ?? [];
+      room.teams.find((entry) => entry.id === shown?.teamId)?.name ?? "";
+    const visible = shown?.segments.slice(0, round.reveal.segmentIndex + 1) ?? [];
     const last = visible.at(-1);
     view.reveal = {
       teamName,
-      composition: current?.segments ?? [],
+      composition: shown?.segments ?? [],
       visibleSegments: visible,
       attribution:
         last?.type === "contribution" ? `Selected by ${last.displayName}` : undefined,
@@ -192,6 +192,7 @@ export function hostView(
   const upcoming = pack.prompts[room.promptCursor % pack.prompts.length];
   const templateId = upcoming.compatibleTemplateIds[0];
   const slots = slotsForTemplate(pack, templateId);
+  const phase = current(room);
   return {
     ...playerView(room, player, pack),
     players: room.players.map((entry) => ({
@@ -205,7 +206,7 @@ export function hostView(
     })),
     teams: room.teams.map((team) => ({ id: team.id, name: team.name })),
     promptPreview:
-      roomPhase(room) === "lobby" || roomPhase(room) === "standings"
+      phase === "gathering" || phase === "standings"
         ? {
             text: upcoming.text,
             formatHint: upcoming.formatHint,
@@ -219,10 +220,4 @@ export function hostView(
           }
         : undefined,
   };
-}
-
-export function roomPhase(room: RoomState): PlayerView["phase"] {
-  if (room.status === "ended") return "ended";
-  if (room.status === "lobby") return "lobby";
-  return currentRound(room)?.phase ?? "lobby";
 }

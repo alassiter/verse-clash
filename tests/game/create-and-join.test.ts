@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createGame, host, priya, sam } from "./harness";
+import { createGame, enterSelecting, host, priya, sam } from "./harness";
 
 describe("create room and join by code", () => {
   it("gives the host a short room code and a shareable URL", () => {
@@ -8,7 +8,7 @@ describe("create room and join by code", () => {
     expect(created.roomCode).toMatch(/^[A-Z0-9]{6}$/);
     expect(created.url).toBe(`/room/${created.roomCode}`);
     const view = commands.getHostView(host, created.roomCode);
-    expect(view.phase).toBe("lobby");
+    expect(view.phase).toBe("gathering");
     expect(view.isHost).toBe(true);
     expect(view.displayName).toBe("Alex");
     expect(view.instruction).toMatch(/waiting for the host/i);
@@ -28,8 +28,9 @@ describe("create room and join by code", () => {
     );
     expect(playerView.displayName).toBe("Priya");
     expect(playerView.isHost).toBe(false);
-    expect(playerView.phase).toBe("lobby");
-    expect(playerView.phaseName).toBe("Lobby");
+    expect(playerView.phase).toBe("gathering");
+    expect(playerView.phaseName).toBe("Gathering");
+    expect(playerView.team).toBeNull();
   });
 
   it("restores the same person after a refresh", () => {
@@ -46,7 +47,7 @@ describe("create room and join by code", () => {
   });
 
   it("returns a player to the same phase after a mid-round refresh", () => {
-    const { commands } = createGame();
+    const { commands, advanceTime } = createGame();
     const created = commands.createRoom(host, { displayName: "Alex" });
     commands.joinRoom(priya, {
       code: created.roomCode,
@@ -56,14 +57,29 @@ describe("create room and join by code", () => {
       code: created.roomCode,
       displayName: "Sam",
     });
-    commands.startRound(host, created.roomCode);
-    commands.forceAdvance(host, created.roomCode);
-    const optionId = commands.getPlayerView(priya, created.roomCode).selection!.options[0].id;
+    enterSelecting(commands, advanceTime, created.roomCode);
+    const optionId = commands.getPlayerView(priya, created.roomCode).selection!.options[0]
+      .id;
     commands.submitChoice(priya, created.roomCode, optionId);
     const again = commands.getPlayerView(priya, created.roomCode);
     expect(again.phase).toBe("selecting");
     expect(again.displayName).toBe("Priya");
     expect(again.selection?.submitted).toBe(true);
     expect(again.selection?.selectedOptionId).toBe(optionId);
+  });
+
+  it("does not move the game when someone only looks after time has passed", () => {
+    const { commands, advanceTime } = createGame();
+    const created = commands.createRoom(host, { displayName: "Alex" });
+    commands.joinRoom(priya, {
+      code: created.roomCode,
+      displayName: "Priya",
+    });
+    commands.startRound(host, created.roomCode);
+    expect(commands.getPlayerView(priya, created.roomCode).phase).toBe("prompt_reveal");
+    advanceTime(12_001);
+    expect(commands.getPlayerView(priya, created.roomCode).phase).toBe("prompt_reveal");
+    commands.heartbeat(host, created.roomCode);
+    expect(commands.getPlayerView(priya, created.roomCode).phase).toBe("selecting");
   });
 });

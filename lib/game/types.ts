@@ -3,10 +3,9 @@ import type { AssembledSegment } from "@/lib/content";
 export type Actor = { id: string };
 
 export type Phase =
-  | "lobby"
+  | "gathering"
   | "prompt_reveal"
   | "selecting"
-  | "assembling"
   | "reveal"
   | "voting"
   | "standings"
@@ -104,18 +103,15 @@ export type RoomCommands = {
     playerId: string,
     teamId: string | null,
   ) => void;
-  skipPrompt: (actor: Actor, roomCode: string) => void;
   startRound: (actor: Actor, roomCode: string) => void;
   submitChoice: (actor: Actor, roomCode: string, optionId: string) => void;
   sendTeamMessage: (actor: Actor, roomCode: string, body: string) => void;
   sendTeamEmoji: (actor: Actor, roomCode: string, emoji: string) => void;
   pause: (actor: Actor, roomCode: string) => void;
   resume: (actor: Actor, roomCode: string) => void;
-  forceAdvance: (actor: Actor, roomCode: string) => void;
-  advanceReveal: (actor: Actor, roomCode: string) => void;
+  endRound: (actor: Actor, roomCode: string) => void;
   sendRevealReaction: (actor: Actor, roomCode: string, emoji: string) => void;
   vote: (actor: Actor, roomCode: string, teamId: string) => void;
-  closeVoting: (actor: Actor, roomCode: string) => void;
   startNextRound: (actor: Actor, roomCode: string) => void;
   endGame: (actor: Actor, roomCode: string) => void;
 };

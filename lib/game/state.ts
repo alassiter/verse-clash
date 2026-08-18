@@ -10,9 +10,6 @@ export const TEAM_SEEDS = [
 
 export const REVEAL_EMOJIS = ["😂", "👏", "🤯", "❤️", "😮"] as const;
 export const DISCONNECT_AFTER_MS = 30_000;
-export const PROMPT_REVEAL_MS = 12_000;
-export const SELECTING_MS = 90_000;
-export const REVEAL_SEGMENT_MS = 4_000;
 
 export type TeamState = {
   id: string;

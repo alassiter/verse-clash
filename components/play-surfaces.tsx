@@ -30,14 +30,30 @@ export function Lobby(props: { view: PlayerView; roomCode: string }) {
         <p className="mb-6 text-2xl">
           You are on <strong>Team {props.view.team.name}</strong>
         </p>
+      ) : props.view.isHost ? (
+        <p className="mb-6 text-2xl">You are the host. You will not join a team.</p>
       ) : (
-        <p className="mb-6 text-2xl">You are off-team as host/facilitator.</p>
+        <p className="mb-6 text-2xl">You will get a team when the host starts.</p>
       )}
       <BigButton
         onClick={() => void setReadyAction(props.roomCode, !props.view.isReady)}
       >
         {props.view.isReady ? "I'm not ready" : "I'm ready"}
       </BigButton>
+    </Panel>
+  );
+}
+
+export function PromptStage(props: { view: PlayerView }) {
+  return (
+    <Panel>
+      <p className="mb-2 text-lg uppercase tracking-wide text-orange-700">Prompt</p>
+      <h2 className="text-4xl font-bold leading-tight">{props.view.prompt?.text}</h2>
+      {props.view.team ? (
+        <p className="mt-6 text-2xl">
+          You are on <strong>Team {props.view.team.name}</strong>
+        </p>
+      ) : null}
     </Panel>
   );
 }

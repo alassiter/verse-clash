@@ -5,6 +5,7 @@ import { getPlayerViewAction, joinRoomAction } from "@/app/actions/room";
 import type { PlayerView } from "@/lib/game";
 import {
   Lobby,
+  PromptStage,
   RevealStage,
   StandingsBoard,
   TeamRoom,
@@ -84,8 +85,9 @@ export function PlayerShell(props: { roomCode: string }) {
         {view.waitingForNextRound ? (
           <p className="text-3xl">This round already started. Hang on for the next one.</p>
         ) : null}
-        {view.phase === "lobby" ? <Lobby view={view} roomCode={props.roomCode} /> : null}
-        {view.phase === "prompt_reveal" || view.phase === "selecting" || view.phase === "assembling" ? (
+        {view.phase === "gathering" ? <Lobby view={view} roomCode={props.roomCode} /> : null}
+        {view.phase === "prompt_reveal" ? <PromptStage view={view} /> : null}
+        {view.phase === "selecting" ? (
           view.waitingForNextRound ? null : (
             <TeamRoom view={view} roomCode={props.roomCode} />
           )

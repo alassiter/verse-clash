@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { createGame, host, jo, lee, openLobby, priya, sam } from "./harness";
+import { RoomError } from "@/lib/game";
 
 describe("seat teams and ready up", () => {
-  it("auto-balances joiners across Goblin, Waffle, Penguin, and Stapler", () => {
+  it("assigns everyone except the host to random teams when the host starts", () => {
     const { commands } = createGame();
     const created = commands.createRoom(host, { displayName: "Alex" });
     commands.joinRoom(priya, { code: created.roomCode, displayName: "Priya" });
@@ -10,26 +11,27 @@ describe("seat teams and ready up", () => {
     commands.joinRoom(lee, { code: created.roomCode, displayName: "Lee" });
     commands.joinRoom(jo, { code: created.roomCode, displayName: "Jo" });
 
-    const view = commands.getPlayerView(priya, created.roomCode);
-    expect(view.team?.name).toBe("Goblin");
-    expect(view.team?.teammates.map((mate) => mate.displayName)).toEqual([
-      "Priya",
-    ]);
+    expect(commands.getPlayerView(priya, created.roomCode).team).toBeNull();
+    commands.startRound(host, created.roomCode);
+
+    expect(commands.getHostView(host, created.roomCode).team).toBeNull();
     const names = commands
       .getHostView(host, created.roomCode)
       .players.filter((player) => !player.isHost)
       .map((player) => `${player.displayName}:${player.teamName}`);
     expect(names).toEqual([
-      "Priya:Goblin",
-      "Sam:Waffle",
-      "Lee:Penguin",
-      "Jo:Stapler",
+      "Priya:Stapler",
+      "Sam:Goblin",
+      "Lee:Waffle",
+      "Jo:Penguin",
     ]);
+    expect(commands.getPlayerView(priya, created.roomCode).team?.name).toBe("Stapler");
   });
 
-  it("lets the host shuffle and move a player, including seating or unseating themselves", () => {
+  it("lets the host shuffle and move a player, but not seat themselves", () => {
     const { commands } = createGame();
     const roomCode = openLobby(commands);
+    commands.startRound(host, roomCode);
     commands.shuffleTeams(host, roomCode);
     const afterShuffle = commands.getHostView(host, roomCode).players;
     expect(
@@ -48,9 +50,9 @@ describe("seat teams and ready up", () => {
     commands.movePlayer(host, roomCode, priya.id, waffle.id);
     expect(commands.getPlayerView(priya, roomCode).team?.name).toBe("Waffle");
 
-    commands.movePlayer(host, roomCode, host.id, waffle.id);
-    expect(commands.getHostView(host, roomCode).team?.name).toBe("Waffle");
-    commands.movePlayer(host, roomCode, host.id, null);
+    expect(() => commands.movePlayer(host, roomCode, host.id, waffle.id)).toThrow(
+      RoomError,
+    );
     expect(commands.getHostView(host, roomCode).team).toBeNull();
   });
 
@@ -72,16 +74,18 @@ describe("seat teams and ready up", () => {
     expect(commands.getPlayerView(priya, roomCode).phase).toBe("prompt_reveal");
   });
 
-  it("seats a late lobby joiner so they can ready", () => {
+  it("lets a late gathering joiner ready without a team, then seats them at start", () => {
     const { commands } = createGame();
     const roomCode = openLobby(commands);
     commands.joinRoom(jo, { code: roomCode, displayName: "Jo" });
     commands.setReady(jo, roomCode, true);
     const joView = commands.getPlayerView(jo, roomCode);
-    expect(joView.team?.name).toBe("Stapler");
+    expect(joView.team).toBeNull();
     expect(
       commands.getHostView(host, roomCode).players.find((player) => player.id === jo.id)
         ?.isReady,
     ).toBe(true);
+    commands.startRound(host, roomCode);
+    expect(commands.getPlayerView(jo, roomCode).team?.name).toBeTruthy();
   });
 });
