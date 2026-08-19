@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createGame, flushAsync, host, lee, openLobby, priya, sam } from "./harness";
+import { createGame, flushAsync, host, lee, openLobby, priya, sam, submitUntilDone } from "./harness";
 import type { RoomCommands } from "@/lib/game";
 
 /**
@@ -13,11 +13,7 @@ import type { RoomCommands } from "@/lib/game";
  * always lands on a team too — submit for it like any other seated player.
  */
 async function submitAll(commands: RoomCommands, actor: { id: string }, roomCode: string) {
-  for (let i = 0; i < 3; i += 1) {
-    const selection = (await commands.getPlayerView(actor, roomCode)).selection;
-    if (!selection || selection.submitted) return;
-    await commands.submitChoice(actor, roomCode, selection.options[0].id);
-  }
+  await submitUntilDone(commands, actor, roomCode);
 }
 
 describe("chaos card rotation", () => {
@@ -63,7 +59,7 @@ describe("chaos card rotation", () => {
     expect(afterFirst.phase).toBe("selecting");
     expect(afterFirst.selection?.submitted).toBe(false);
 
-    await commands.submitChoice(priya, roomCode, afterFirst.selection!.options[0].id);
+    await submitAll(commands, priya, roomCode);
     await submitAll(commands, sam, roomCode);
     await submitAll(commands, lee, roomCode); // seatUnseated auto-placed lee onto a team too
     await flushAsync();
@@ -96,7 +92,7 @@ describe("sabotage chaos card", () => {
     await flushAsync();
     expect((await commands.getPlayerView(priya, roomCode)).phase).toBe("reveal");
 
-    for (let i = 0; i < 40; i += 1) {
+    for (let i = 0; i < 80; i += 1) {
       if ((await commands.getPlayerView(priya, roomCode)).phase === "voting") break;
       advanceTime(4_001);
       await commands.heartbeat(host, roomCode);

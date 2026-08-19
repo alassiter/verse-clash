@@ -71,31 +71,75 @@ export function wordsForSlot(
   );
 }
 
-/** Picks one word for a slot nobody is around to fill — used when a team is
- * down to a single active player, so the rest of their verse still comes from
- * real, varied vocabulary instead of the same static house filler every time. */
-export function autoFillWord(
-  pack: ContentPack,
-  slot: Slot,
-  promptId: string,
-  chaosCard: ChaosCardId | null | undefined,
-  random: () => number,
-): Word {
-  const basePool = wordsForSlot(pack, slot, promptId);
-  const filteredPool = applyChaosCardFilter(basePool, chaosCard);
-  const pool = filteredPool.length > 0 ? filteredPool : basePool;
-  if (pool.length === 0) {
-    throw new DealError(`No words available to auto-fill slot ${slot.id}.`);
-  }
-  const index = Math.min(pool.length - 1, Math.floor(random() * pool.length));
-  return pool[index];
-}
-
 const CHAOS_ROUND_PICK_COUNT = 5;
 
 function hasMinimumMix(pool: Word[]): boolean {
   const buckets = bucketWords(pool);
   return buckets.sensible.length >= 2 && buckets.strange.length >= 2 && buckets.chaos.length >= 1;
+}
+
+function unusedCount(pool: Word[], usedTexts: Set<string>): number {
+  return pool.filter((word) => !usedTexts.has(word.text)).length;
+}
+
+/** Slots to rotate through when dealing, applying No Nouns as a rotation skip. */
+export function dealSlotsForTemplate(
+  pack: ContentPack,
+  templateId: string,
+  chaosCard?: ChaosCardId | null,
+): Slot[] {
+  let slots = slotsForTemplate(pack, templateId);
+  if (slots.length === 0) {
+    throw new DealError("Template has no slots to deal.");
+  }
+  // No Nouns excludes noun slots from the rotation entirely (so the template's
+  // static assembler falls back to its house filler there) rather than filtering
+  // an already role-locked pool down to nothing.
+  if (chaosCard === "no_nouns") {
+    const nonNounSlots = slots.filter((slot) => slot.grammaticalRole !== "noun");
+    if (nonNounSlots.length > 0) slots = nonNounSlots;
+  }
+  return slots;
+}
+
+/** Deals one 5-option hand for a Slot. `usedTexts` is mutated with the chosen option texts. */
+export function dealHand(
+  pack: ContentPack,
+  input: {
+    promptId: string;
+    slot: Slot;
+    usedTexts: Set<string>;
+    random: () => number;
+    chaosCard?: ChaosCardId | null;
+  },
+): DealtOption[] {
+  const basePool = wordsForSlot(pack, input.slot, input.promptId);
+  const filteredPool = applyChaosCardFilter(basePool, input.chaosCard);
+  // Fall back to the unfiltered pool if the filter leaves too little to deal —
+  // graceful degradation over an impossible deal for this slot.
+  const pool = hasMinimumMix(filteredPool) ? filteredPool : basePool;
+  const chosen =
+    input.chaosCard === "chaos_round"
+      ? pickFrom(pool, CHAOS_ROUND_PICK_COUNT, input.usedTexts, input.random)
+      : (() => {
+          const buckets = bucketWords(pool);
+          if (
+            unusedCount(buckets.sensible, input.usedTexts) >= 2 &&
+            unusedCount(buckets.strange, input.usedTexts) >= 2 &&
+            unusedCount(buckets.chaos, input.usedTexts) >= 1
+          ) {
+            return [
+              ...pickFrom(buckets.sensible, 2, input.usedTexts, input.random),
+              ...pickFrom(buckets.strange, 2, input.usedTexts, input.random),
+              ...pickFrom(buckets.chaos, 1, input.usedTexts, input.random),
+            ];
+          }
+          return pickFrom(pool, CHAOS_ROUND_PICK_COUNT, input.usedTexts, input.random);
+        })();
+  return chosen.map((word) => ({
+    id: word.id,
+    text: word.text,
+  }));
 }
 
 export function dealForTeam(
@@ -108,45 +152,21 @@ export function dealForTeam(
     chaosCard?: ChaosCardId;
   },
 ): DealtAssignment[] {
-  let slots = slotsForTemplate(pack, input.templateId);
-  if (slots.length === 0) {
-    throw new DealError("Template has no slots to deal.");
-  }
-  // No Nouns excludes noun slots from the rotation entirely (so the template's
-  // static assembler falls back to its house filler there) rather than filtering
-  // an already role-locked pool down to nothing.
-  if (input.chaosCard === "no_nouns") {
-    const nonNounSlots = slots.filter((slot) => slot.grammaticalRole !== "noun");
-    if (nonNounSlots.length > 0) slots = nonNounSlots;
-  }
+  const slots = dealSlotsForTemplate(pack, input.templateId, input.chaosCard);
   const usedTexts = new Set<string>();
   return input.playerIds.map((playerId, index) => {
     const slot = slots[index % slots.length];
-    const basePool = wordsForSlot(pack, slot, input.promptId);
-    const filteredPool = applyChaosCardFilter(basePool, input.chaosCard);
-    // Fall back to the unfiltered pool if the filter leaves too little to deal —
-    // graceful degradation over an impossible deal for this slot.
-    const pool = hasMinimumMix(filteredPool) ? filteredPool : basePool;
-    const chosen =
-      input.chaosCard === "chaos_round"
-        ? pickFrom(pool, CHAOS_ROUND_PICK_COUNT, usedTexts, input.random)
-        : (() => {
-            const buckets = bucketWords(pool);
-            return [
-              ...pickFrom(buckets.sensible, 2, usedTexts, input.random),
-              ...pickFrom(buckets.strange, 2, usedTexts, input.random),
-              ...pickFrom(buckets.chaos, 1, usedTexts, input.random),
-            ];
-          })();
-    const options: DealtOption[] = chosen.map((word) => ({
-      id: word.id,
-      text: word.text,
-    }));
     return {
       playerId,
       slotId: slot.id,
       playerLabel: slot.playerLabel,
-      options,
+      options: dealHand(pack, {
+        promptId: input.promptId,
+        slot,
+        usedTexts,
+        random: input.random,
+        chaosCard: input.chaosCard,
+      }),
     };
   });
 }

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { RoomStore } from "@/lib/game/room-store";
 import { createInMemoryRoomStore } from "@/lib/game/room-store";
-import { createGame, host, lee, openLobby, priya, sam } from "./harness";
+import { createGame, host, lee, openLobby, priya, sam, submitUntilDone } from "./harness";
 
 // Wraps a RoomStore so its first N `save` calls report a version conflict
 // (as if another request had saved in between), forcing callers through the
@@ -63,9 +63,7 @@ describe("optimistic concurrency", () => {
     advanceTime(12_001);
     await commands.heartbeat(host, roomCode);
     for (const actor of [priya, sam, lee]) {
-      const optionId = (await commands.getPlayerView(actor, roomCode)).selection!
-        .options[0].id;
-      await commands.submitChoice(actor, roomCode, optionId);
+      await submitUntilDone(commands, actor, roomCode);
     }
     for (let i = 0; i < 80; i += 1) {
       if ((await commands.getPlayerView(priya, roomCode)).phase === "voting") break;

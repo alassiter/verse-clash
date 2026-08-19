@@ -1,9 +1,37 @@
 import { describe, expect, it } from "vitest";
-import { createGame, enterSelecting, flushAsync, host, priya, sam } from "./harness";
+import {
+  createGame,
+  enterSelecting,
+  flushAsync,
+  host,
+  priya,
+  sam,
+  submitUntilDone,
+} from "./harness";
+import type { AiComposer, ComposeJudgeInput } from "@/lib/game/types";
 
-describe("solo team auto-fill", () => {
-  it("fills the rest of a solo team's slots with real auto-picked words and sends them to composition", async () => {
-    const { commands, advanceTime } = createGame();
+function recordingComposer() {
+  const captured: ComposeJudgeInput["teams"] = [];
+  const ai: AiComposer = {
+    async composeAndJudge(input) {
+      captured.splice(0, captured.length, ...input.teams);
+      return {
+        requestId: input.requestId,
+        compositions: input.teams.map((team) => ({
+          teamId: team.teamId,
+          segments: [{ type: "static", text: "ok" }],
+          source: "ai",
+        })),
+      };
+    },
+  };
+  return { ai, captured };
+}
+
+describe("solo team fill floor", () => {
+  it("queues a solo player for 11 Fills instead of auto-filling leftover Slots", async () => {
+    const { ai, captured } = recordingComposer();
+    const { commands, advanceTime } = createGame({ ai });
     const created = await commands.createRoom(host, { displayName: "Alex" });
     const roomCode = created.roomCode;
     await commands.joinRoom(priya, { code: roomCode, displayName: "Priya" });
@@ -11,23 +39,25 @@ describe("solo team auto-fill", () => {
     await commands.movePlayer(host, roomCode, priya.id, goblin.id);
 
     await enterSelecting(commands, advanceTime, roomCode);
-    expect((await commands.getPlayerView(priya, roomCode)).soloAutoFill).toBe(true);
+    expect((await commands.getPlayerView(priya, roomCode)).soloAutoFill).toBeUndefined();
 
-    const optionId = (await commands.getPlayerView(priya, roomCode)).selection!.options[0].id;
-    await commands.submitChoice(priya, roomCode, optionId);
+    const first = (await commands.getPlayerView(priya, roomCode)).selection!;
+    await commands.submitChoice(priya, roomCode, first.options[0].id);
+    const next = await commands.getPlayerView(priya, roomCode);
+    expect(next.phase).toBe("selecting");
+    expect(next.selection?.submitted).toBe(false);
+
+    await submitUntilDone(commands, priya, roomCode);
     await flushAsync();
 
-    const view = await commands.getPlayerView(priya, roomCode);
-    expect(view.phase).toBe("reveal");
-    const contributions = view.reveal!.composition.filter((s) => s.type === "contribution");
-    expect(contributions).toHaveLength(4);
-    expect(contributions.filter((c) => c.displayName === "Priya")).toHaveLength(1);
-    expect(contributions.filter((c) => c.displayName === "Auto-fill")).toHaveLength(3);
-    expect(contributions.some((c) => c.displayName === "House")).toBe(false);
+    const goblinFills = captured.find((team) => team.teamId === "goblin")?.fills;
+    expect(goblinFills).toHaveLength(11);
+    expect(goblinFills?.every((fill) => fill.displayName === "Priya")).toBe(true);
   });
 
-  it("does not mark soloAutoFill and still uses the house filler when a team has more than one active player", async () => {
-    const { commands, advanceTime } = createGame();
+  it("does not insert house auto-fill when a team has more than one active player", async () => {
+    const { ai, captured } = recordingComposer();
+    const { commands, advanceTime } = createGame({ ai });
     const created = await commands.createRoom(host, { displayName: "Alex" });
     const roomCode = created.roomCode;
     await commands.joinRoom(priya, { code: roomCode, displayName: "Priya" });
@@ -39,51 +69,43 @@ describe("solo team auto-fill", () => {
     await enterSelecting(commands, advanceTime, roomCode);
     expect((await commands.getPlayerView(priya, roomCode)).soloAutoFill).toBeUndefined();
 
-    for (const actor of [priya, sam]) {
-      const optionId = (await commands.getPlayerView(actor, roomCode)).selection!.options[0].id;
-      await commands.submitChoice(actor, roomCode, optionId);
-    }
+    await submitUntilDone(commands, priya, roomCode);
+    await submitUntilDone(commands, sam, roomCode);
     await flushAsync();
 
-    const view = await commands.getPlayerView(priya, roomCode);
-    expect(view.phase).toBe("reveal");
-    const contributions = view.reveal!.composition.filter((s) => s.type === "contribution");
-    expect(contributions.filter((c) => c.displayName === "House")).toHaveLength(2);
-    expect(contributions.some((c) => c.displayName === "Auto-fill")).toBe(false);
+    const goblinFills = captured.find((team) => team.teamId === "goblin")?.fills;
+    expect(goblinFills).toHaveLength(11);
+    expect(goblinFills?.some((fill) => fill.displayName === "Auto-fill")).toBe(false);
+    expect(goblinFills?.some((fill) => fill.displayName === "House")).toBe(false);
   });
 
-  it("still auto-fills the untouched slots for a solo player under double_trouble", async () => {
-    const { commands, advanceTime } = createGame();
+  it("doubles the solo queue to 22 Fills under double_trouble", async () => {
+    const { ai, captured } = recordingComposer();
+    const { commands, advanceTime } = createGame({ ai });
     const created = await commands.createRoom(host, { displayName: "Alex" });
     const roomCode = created.roomCode;
     await commands.joinRoom(priya, { code: roomCode, displayName: "Priya" });
     const goblin = (await commands.getHostView(host, roomCode)).teams.find((t) => t.id === "goblin")!;
     await commands.movePlayer(host, roomCode, priya.id, goblin.id);
 
-    await commands.startRound(host, roomCode); // round 1: straight
+    await commands.startRound(host, roomCode);
     await commands.endRound(host, roomCode);
-    await commands.startNextRound(host, roomCode); // round 2: straight
+    await commands.startNextRound(host, roomCode);
     await commands.endRound(host, roomCode);
-    await commands.startNextRound(host, roomCode); // round 3: chaos (double_trouble, random=0.1)
+    await commands.startNextRound(host, roomCode);
 
     advanceTime(12_001);
     await commands.heartbeat(host, roomCode);
     let view = await commands.getPlayerView(priya, roomCode);
     expect(view.phase).toBe("selecting");
     expect(view.chaosCard?.id).toBe("double_trouble");
-    expect(view.soloAutoFill).toBe(true);
+    expect(view.soloAutoFill).toBeUndefined();
 
-    await commands.submitChoice(priya, roomCode, view.selection!.options[0].id);
-    view = await commands.getPlayerView(priya, roomCode);
-    expect(view.selection?.submitted).toBe(false); // one more of priya's own words to place
-    await commands.submitChoice(priya, roomCode, view.selection!.options[0].id);
+    await submitUntilDone(commands, priya, roomCode);
     await flushAsync();
 
-    view = await commands.getPlayerView(priya, roomCode);
-    expect(view.phase).toBe("reveal");
-    const contributions = view.reveal!.composition.filter((s) => s.type === "contribution");
-    expect(contributions).toHaveLength(4);
-    expect(contributions.filter((c) => c.displayName === "Priya")).toHaveLength(2);
-    expect(contributions.filter((c) => c.displayName === "Auto-fill")).toHaveLength(2);
+    const goblinFills = captured.find((team) => team.teamId === "goblin")?.fills;
+    expect(goblinFills).toHaveLength(22);
+    expect(goblinFills?.every((fill) => fill.displayName === "Priya")).toBe(true);
   });
 });

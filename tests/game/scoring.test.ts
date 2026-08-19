@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createGame, flushAsync, host, lee, priya, sam } from "./harness";
+import { createGame, flushAsync, host, lee, priya, sam, submitUntilDone } from "./harness";
 
 describe("hybrid scoring across multiple teams", () => {
   it("computes word points and placement per team and rolls up into cumulative totals", async () => {
@@ -22,13 +22,12 @@ describe("hybrid scoring across multiple teams", () => {
     await commands.heartbeat(host, roomCode);
 
     for (const actor of [priya, sam, lee]) {
-      const optionId = (await commands.getPlayerView(actor, roomCode)).selection!.options[0].id;
-      await commands.submitChoice(actor, roomCode, optionId);
+      await submitUntilDone(commands, actor, roomCode);
     }
     await flushAsync();
     expect((await commands.getPlayerView(priya, roomCode)).phase).toBe("reveal");
 
-    for (let i = 0; i < 40; i += 1) {
+    for (let i = 0; i < 80; i += 1) {
       if ((await commands.getPlayerView(priya, roomCode)).phase === "voting") break;
       advanceTime(4_001);
       await commands.heartbeat(host, roomCode);

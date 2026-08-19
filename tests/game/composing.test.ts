@@ -44,7 +44,7 @@ describe("composing phase", () => {
     ).toBe(true);
   });
 
-  it("falls back to the deterministic composer when the AI call rejects", async () => {
+  it("falls back to a cycling-blank flavor when the AI call rejects", async () => {
     const ai: AiComposer = {
       async composeAndJudge() {
         throw new Error("upstream failure");
@@ -54,17 +54,26 @@ describe("composing phase", () => {
     const roomCode = await playThroughSelection(commands, advanceTime);
     const view = await commands.getPlayerView(priya, roomCode);
     expect(view.phase).toBe("reveal");
+    const composition = view.reveal?.composition ?? [];
     expect(
-      view.reveal?.composition.some(
+      composition.some(
+        (segment) => segment.type === "contribution" && segment.displayName === "Priya",
+      ),
+    ).toBe(true);
+    expect(
+      composition.some(
         (segment) =>
           segment.type === "contribution" &&
           segment.displayName === "House" &&
           segment.text === "continue",
       ),
-    ).toBe(true);
+    ).toBe(false);
+    expect(
+      composition.some((segment) => segment.type === "static" && segment.text.includes(" — to ")),
+    ).toBe(false);
   });
 
-  it("falls back to the deterministic composer when the AI call never resolves before the ceiling", async () => {
+  it("falls back to a cycling-blank flavor when the AI call never resolves before the ceiling", async () => {
     const ai: AiComposer = {
       composeAndJudge: () => new Promise(() => {}),
     };
@@ -81,6 +90,11 @@ describe("composing phase", () => {
           segment.type === "contribution" &&
           segment.displayName === "House" &&
           segment.text === "continue",
+      ),
+    ).toBe(false);
+    expect(
+      view.reveal?.composition.some(
+        (segment) => segment.type === "contribution" && segment.displayName === "Priya",
       ),
     ).toBe(true);
   });

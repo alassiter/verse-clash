@@ -1,13 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { createGame, flushAsync, host, lee, priya, sam } from "./harness";
+import { createGame, flushAsync, host, lee, priya, sam, submitUntilDone } from "./harness";
 import type { RoomCommands } from "@/lib/game";
 
 async function submitAll(commands: RoomCommands, actor: { id: string }, roomCode: string) {
-  for (let i = 0; i < 4; i += 1) {
-    const selection = (await commands.getPlayerView(actor, roomCode)).selection;
-    if (!selection || selection.submitted) return;
-    await commands.submitChoice(actor, roomCode, selection.options[0].id);
-  }
+  await submitUntilDone(commands, actor, roomCode);
 }
 
 async function playRound(
@@ -30,11 +26,11 @@ async function playRound(
   }
   await flushAsync();
 
-  for (let i = 0; i < 40; i += 1) {
-    if ((await commands.getPlayerView(priya, roomCode)).phase === "voting") break;
-    advanceTime(4_001);
-    await commands.heartbeat(host, roomCode);
-  }
+    for (let i = 0; i < 120; i += 1) {
+      if ((await commands.getPlayerView(priya, roomCode)).phase === "voting") break;
+      advanceTime(4_001);
+      await commands.heartbeat(host, roomCode);
+    }
   await commands.vote(priya, roomCode, votingTeamId);
   advanceTime(15_001);
   await commands.heartbeat(host, roomCode);

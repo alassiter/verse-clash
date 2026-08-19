@@ -79,6 +79,21 @@ export function flushAsync(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+export async function submitUntilDone(
+  commands: RoomCommands,
+  actor: { id: string },
+  roomCode: string,
+) {
+  for (let i = 0; i < 32; i += 1) {
+    const view = await commands.getPlayerView(actor, roomCode);
+    if (view.phase !== "selecting") return;
+    const selection = view.selection;
+    if (!selection || selection.submitted || selection.options.length === 0) return;
+    await commands.submitChoice(actor, roomCode, selection.options[0].id);
+  }
+  throw new Error("submitUntilDone: queue did not finish");
+}
+
 export async function playThroughSelection(
   commands: RoomCommands,
   advanceTime: (ms: number) => void,
@@ -92,8 +107,7 @@ export async function playThroughSelection(
   await commands.movePlayer(host, roomCode, sam.id, goblin.id);
   await enterSelecting(commands, advanceTime, roomCode);
   for (const actor of [priya, sam, lee]) {
-    const optionId = (await commands.getPlayerView(actor, roomCode)).selection!.options[0].id;
-    await commands.submitChoice(actor, roomCode, optionId);
+    await submitUntilDone(commands, actor, roomCode);
   }
   await flushAsync();
   return roomCode;
