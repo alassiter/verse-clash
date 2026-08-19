@@ -56,10 +56,19 @@ export function assembleCyclingVerse(
   return segments;
 }
 
+export function cyclingFallbackVerse(
+  pack: ContentPack,
+  fills: CompositionFill[],
+  random: () => number,
+): { flavorId: string; segments: AssembledSegment[] } {
+  const flavor = pickCyclingFlavor(random);
+  return { flavorId: flavor.id, segments: assembleCyclingVerse(pack, fills, flavor) };
+}
+
 export function cyclingFallback(
   pack: ContentPack,
   fills: CompositionFill[],
   random: () => number,
 ): AssembledSegment[] {
-  return assembleCyclingVerse(pack, fills, pickCyclingFlavor(random));
+  return cyclingFallbackVerse(pack, fills, random).segments;
 }

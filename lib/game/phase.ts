@@ -1,5 +1,5 @@
 import {
-  cyclingFallback,
+  cyclingFallbackVerse,
   CHAOS_CARD_IDS,
   dealHand,
   dealSlotsForTemplate,
@@ -8,6 +8,7 @@ import {
   type CompositionFill,
   type Prompt,
 } from "@/lib/content";
+import { logVerseCompose, type VerseComposeOrigin } from "@/lib/ai/verse-compose-log";
 import {
   currentRound,
   leadingTeams,
@@ -373,7 +374,7 @@ export function buildTeamFills(
   room: RoomState,
   round: RoundState,
   pack: ContentPack,
-): Array<{ teamId: string; fills: CompositionFill[] }> {
+): ComposeJudgeInput["teams"] {
   const teamsWithAssignments = room.teams.filter((team) =>
     round.assignments.some((assignment) => resolveAssignmentTeamId(room, assignment) === team.id),
   );
@@ -399,24 +400,41 @@ export function buildTeamFills(
           wordId: word?.id,
         };
       });
-    return { teamId: team.id, fills };
+    return { teamId: team.id, teamName: team.name, fills };
   });
 }
 
 function flavorCompositions(
   pack: ContentPack,
-  teamsFills: Array<{ teamId: string; fills: CompositionFill[] }>,
+  teamsFills: ComposeJudgeInput["teams"],
   random: () => number,
+  log: {
+    roomCode: string;
+    roundNumber: number;
+    origin: Exclude<VerseComposeOrigin, "claude">;
+    reason: string;
+  },
 ): RoundState["compositions"] {
-  return teamsFills.map(({ teamId, fills }) => ({
-    teamId,
-    segments: cyclingFallback(pack, fills, random),
-    source: "deterministic_fallback" as const,
-  }));
+  return teamsFills.map(({ teamId, teamName, fills }) => {
+    const { flavorId, segments } = cyclingFallbackVerse(pack, fills, random);
+    logVerseCompose({
+      roomCode: log.roomCode,
+      roundNumber: log.roundNumber,
+      teamName,
+      origin: log.origin,
+      flavor: flavorId,
+      reason: log.reason,
+    });
+    return {
+      teamId,
+      segments,
+      source: "deterministic_fallback" as const,
+    };
+  });
 }
 
 function applySabotage(
-  teamsFills: Array<{ teamId: string; fills: CompositionFill[] }>,
+  teamsFills: ComposeJudgeInput["teams"],
   random: () => number,
 ) {
   const sourceCandidates = teamsFills.filter((entry) => entry.fills.length > 0);
@@ -444,13 +462,24 @@ function beginComposing(room: RoomState, round: RoundState, ctx: PhaseContext) {
 
   const { ai, pack } = ctx;
   const roomId = room.id;
+  const roomCode = room.code;
   const roundId = round.id;
+  const roundNumber = round.number;
   const templateId = round.templateId;
   const promptId = round.promptId;
   const random = ctx.random;
 
   ai
-    .composeAndJudge({ roomId, roundId, requestId, templateId, promptId, teams: teamsFills })
+    .composeAndJudge({
+      roomId,
+      roomCode,
+      roundId,
+      roundNumber,
+      requestId,
+      templateId,
+      promptId,
+      teams: teamsFills,
+    })
     .then(async (result) => {
       applyComposition(ai, pack, roomId, roundId, requestId, teamsFills, result);
       await ai.persistRoom(roomId);
@@ -458,7 +487,12 @@ function beginComposing(room: RoomState, round: RoundState, ctx: PhaseContext) {
     .catch(async () => {
       applyComposition(ai, pack, roomId, roundId, requestId, teamsFills, {
         requestId,
-        compositions: flavorCompositions(pack, teamsFills, random),
+        compositions: flavorCompositions(pack, teamsFills, random, {
+          roomCode,
+          roundNumber,
+          origin: "call-failed",
+          reason: "compose rejected",
+        }),
       });
       await ai.persistRoom(roomId);
     });
@@ -470,7 +504,7 @@ function applyComposition(
   roomId: string,
   roundId: string,
   requestId: string,
-  teamsFills: Array<{ teamId: string; fills: CompositionFill[] }>,
+  teamsFills: ComposeJudgeInput["teams"],
   result: ComposeJudgeResult,
 ) {
   const room = ai.getRoom(roomId);
@@ -495,7 +529,12 @@ function forceFallbackComposition(room: RoomState, round: RoundState, ctx: Phase
   if (round.chaosCard === "sabotage") {
     applySabotage(teamsFills, ctx.random);
   }
-  round.compositions = flavorCompositions(ctx.pack, teamsFills, ctx.random);
+  round.compositions = flavorCompositions(ctx.pack, teamsFills, ctx.random, {
+    roomCode: room.code,
+    roundNumber: round.number,
+    origin: "call-failed",
+    reason: "compose timed out",
+  });
   round.judging = null;
   round.scoring = scoreRound(ctx.pack, teamsFills, null);
   if (round.pendingComposition) {

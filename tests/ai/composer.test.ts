@@ -68,13 +68,15 @@ describe("composer prompt", () => {
       pack,
       {
         roomId: "ROOM1",
+        roomCode: "K7PQ",
         roundId: "round-1",
+        roundNumber: 1,
         requestId: "req-1",
         templateId: "three-principles",
         promptId: "vision",
         teams: [],
       },
-      { teamId: "goblin", fills: fillsFor(pack) },
+      { teamId: "goblin", teamName: "Goblins", fills: fillsFor(pack) },
     );
     expect(prompt).not.toMatch(/Target length/);
     expect(prompt).not.toMatch(/one sentence|two sentences|three sentences or lines/);
@@ -91,11 +93,13 @@ describe("createAnthropicComposer without an API key", () => {
 
     const result = await composer.composeAndJudge({
       roomId: "ROOM1",
+      roomCode: "K7PQ",
       roundId: "round-1",
+      roundNumber: 1,
       requestId: "req-1",
       templateId: "three-principles",
       promptId: "vision",
-      teams: [{ teamId: "goblin", fills }],
+      teams: [{ teamId: "goblin", teamName: "Goblins", fills }],
     });
 
     expect(result.requestId).toBe("req-1");

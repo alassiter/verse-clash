@@ -2,8 +2,13 @@ import { z } from "zod";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { getAnthropicClient } from "@/lib/ai/client";
 import { verifyComposition } from "@/lib/ai/verify";
-import { cyclingFallback } from "@/lib/content";
+import { cyclingFallbackVerse } from "@/lib/content";
 import type { AssembledSegment, CompositionFill, ContentPack } from "@/lib/content";
+import {
+  formatCallFailedReason,
+  logVerseCompose,
+  type VerseComposeOrigin,
+} from "@/lib/ai/verse-compose-log";
 import type {
   AiComposer,
   ComposeJudgeInput,
@@ -57,7 +62,7 @@ function segmentsToText(segments: AssembledSegment[]): string {
 export function buildComposePrompt(
   pack: ContentPack,
   input: ComposeJudgeInput,
-  team: { teamId: string; fills: CompositionFill[] },
+  team: { teamId: string; teamName: string; fills: CompositionFill[] },
 ): string {
   const prompt = pack.prompts.find((entry) => entry.id === input.promptId);
   const wordList = team.fills
@@ -118,11 +123,37 @@ function flavorFallback(
   pack: ContentPack,
   team: { teamId: string; fills: CompositionFill[] },
   random: () => number,
-): { teamId: string; segments: AssembledSegment[]; source: "deterministic_fallback" } {
+): { teamId: string; segments: AssembledSegment[]; source: "deterministic_fallback"; flavorId: string } {
+  const { flavorId, segments } = cyclingFallbackVerse(pack, team.fills, random);
   return {
     teamId: team.teamId,
-    segments: cyclingFallback(pack, team.fills, random),
+    segments,
     source: "deterministic_fallback",
+    flavorId,
+  };
+}
+
+function logAndFallback(
+  pack: ContentPack,
+  input: ComposeJudgeInput,
+  team: { teamId: string; teamName: string; fills: CompositionFill[] },
+  random: () => number,
+  origin: Exclude<VerseComposeOrigin, "claude">,
+  reason?: string,
+): { teamId: string; segments: AssembledSegment[]; source: "deterministic_fallback" } {
+  const fallback = flavorFallback(pack, team, random);
+  logVerseCompose({
+    roomCode: input.roomCode,
+    roundNumber: input.roundNumber,
+    teamName: team.teamName,
+    origin,
+    flavor: fallback.flavorId,
+    reason,
+  });
+  return {
+    teamId: fallback.teamId,
+    segments: fallback.segments,
+    source: fallback.source,
   };
 }
 
@@ -130,7 +161,7 @@ async function composeTeam(
   client: NonNullable<ReturnType<typeof getAnthropicClient>>,
   pack: ContentPack,
   input: ComposeJudgeInput,
-  team: { teamId: string; fills: CompositionFill[] },
+  team: { teamId: string; teamName: string; fills: CompositionFill[] },
   random: () => number,
 ): Promise<{
   teamId: string;
@@ -150,19 +181,23 @@ async function composeTeam(
     );
     const candidate = response.parsed_output;
     if (!candidate) {
-      return flavorFallback(pack, team, random);
+      return logAndFallback(pack, input, team, random, "call-failed", "no parsed output");
     }
     const verseText = candidate.verseLines.join(" ");
     const result = verifyComposition(team.fills, candidate.wordUsage, verseText);
     if (result.ok) {
+      logVerseCompose({
+        roomCode: input.roomCode,
+        roundNumber: input.roundNumber,
+        teamName: team.teamName,
+        origin: "claude",
+      });
       return { teamId: team.teamId, segments: toSegments(candidate, team.fills), source: "ai" };
     }
+    return logAndFallback(pack, input, team, random, "verify-failed", result.reason);
   } catch (err) {
-    console.warn(
-      `[ai-composer] team ${team.teamId} compose failed: ${err instanceof Error ? err.message : String(err)}`,
-    );
+    return logAndFallback(pack, input, team, random, "call-failed", formatCallFailedReason(err));
   }
-  return flavorFallback(pack, team, random);
 }
 
 async function judgeVerses(
@@ -212,7 +247,7 @@ export function createAnthropicComposer(
       const client = getAnthropicClient();
       const compositions = client
         ? await Promise.all(input.teams.map((team) => composeTeam(client, pack, input, team, random)))
-        : input.teams.map((team) => flavorFallback(pack, team, random));
+        : input.teams.map((team) => logAndFallback(pack, input, team, random, "skipped-no-key"));
       const judging = client
         ? await judgeVerses(client, pack, input, compositions)
         : undefined;

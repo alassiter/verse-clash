@@ -14,11 +14,13 @@ export type Phase =
 
 export type ComposeJudgeInput = {
   roomId: string;
+  roomCode: string;
   roundId: string;
+  roundNumber: number;
   requestId: string;
   templateId: string;
   promptId: string;
-  teams: Array<{ teamId: string; fills: CompositionFill[] }>;
+  teams: Array<{ teamId: string; teamName: string; fills: CompositionFill[] }>;
 };
 
 export type JudgeScore = {

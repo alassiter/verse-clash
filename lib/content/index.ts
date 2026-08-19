@@ -1,6 +1,6 @@
 export { assembleComposition } from "@/lib/content/assemble";
 export { CHAOS_CARD_COPY, CHAOS_CARD_IDS, applyChaosCardFilter } from "@/lib/content/chaosCards";
-export { cyclingFallback } from "@/lib/content/cycling";
+export { cyclingFallback, cyclingFallbackVerse } from "@/lib/content/cycling";
 export {
   dealForTeam,
   dealHand,
