@@ -1,9 +1,8 @@
 "use client";
 
-import { useState } from "react";
 import type { PlayerView } from "@/lib/game";
 import { BigButton, Panel } from "@/components/ui";
-import { sendRevealReactionAction, sendTeamEmojiAction, sendTeamMessageAction, setReadyAction, submitChoiceAction, voteAction } from "@/app/actions/room";
+import { sendRevealReactionAction, setReadyAction, submitChoiceAction, voteAction } from "@/app/actions/room";
 
 export function Lobby(props: { view: PlayerView; roomCode: string }) {
   const players = props.view.lobby?.players ?? [];
@@ -43,9 +42,37 @@ export function Lobby(props: { view: PlayerView; roomCode: string }) {
   );
 }
 
+export function ChaosCardBanner(props: { view: PlayerView }) {
+  const card = props.view.chaosCard;
+  if (!card) return null;
+  return (
+    <div className="mb-6 rounded-2xl border-2 border-comic-ink bg-amber-100 px-5 py-4">
+      <p className="text-lg font-black uppercase tracking-wide text-amber-800">
+        Chaos Card: {card.name}
+      </p>
+      <p className="text-lg text-amber-900">{card.description}</p>
+    </div>
+  );
+}
+
+export function SoloAutoFillBanner(props: { view: PlayerView }) {
+  if (!props.view.soloAutoFill) return null;
+  return (
+    <div className="mb-6 rounded-2xl border-2 border-comic-ink bg-sky-100 px-5 py-4">
+      <p className="text-lg font-black uppercase tracking-wide text-sky-800">
+        Flying Solo
+      </p>
+      <p className="text-lg text-sky-900">
+        You&rsquo;re the only one on your team this round — we auto-picked the rest of your team&rsquo;s words.
+      </p>
+    </div>
+  );
+}
+
 export function PromptStage(props: { view: PlayerView }) {
   return (
     <Panel tone="blue" title="Prompt">
+      <ChaosCardBanner view={props.view} />
       <h2 className="text-4xl font-bold leading-tight">{props.view.prompt?.text}</h2>
       {props.view.team ? (
         <p className="mt-6 text-2xl">
@@ -57,11 +84,12 @@ export function PromptStage(props: { view: PlayerView }) {
 }
 
 export function TeamRoom(props: { view: PlayerView; roomCode: string }) {
-  const [draft, setDraft] = useState("");
   const selection = props.view.selection;
   return (
     <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
       <Panel tone="blue" title="Prompt">
+        <ChaosCardBanner view={props.view} />
+        <SoloAutoFillBanner view={props.view} />
         <h2 className="mb-8 text-4xl font-bold leading-tight">{props.view.prompt?.text}</h2>
         {selection ? (
           <>
@@ -89,54 +117,48 @@ export function TeamRoom(props: { view: PlayerView; roomCode: string }) {
       </Panel>
       <Panel tone="green" title="Team">
         <h3 className="mb-3 text-2xl font-bold">Teammates</h3>
-        <ul className="mb-6 space-y-2 text-xl">
+        <ul className="space-y-2 text-xl">
           {props.view.teammates.map((mate) => (
             <li key={mate.id}>
               {mate.displayName} {mate.submitted ? "✓" : "…"}
             </li>
           ))}
         </ul>
-        <h3 className="mb-3 text-2xl font-bold">Team chat</h3>
-        <div className="mb-3 max-h-48 space-y-1 overflow-y-auto text-lg">
-          {props.view.teamChat.map((message, index) => (
-            <p key={`${message.playerName}-${index}`}>
-              <strong>{message.playerName}:</strong> {message.body}
-            </p>
-          ))}
-        </div>
-        <form
-          className="flex gap-2"
-          onSubmit={(event) => {
-            event.preventDefault();
-            if (!draft.trim()) return;
-            void sendTeamMessageAction(props.roomCode, draft.trim());
-            setDraft("");
-          }}
-        >
-          <input
-            className="min-w-0 flex-1 rounded-xl border border-stone-300 px-3 py-3 text-lg"
-            value={draft}
-            onChange={(event) => setDraft(event.target.value)}
-            placeholder="Tone check, not spoilers"
-          />
-          <BigButton type="submit" className="px-4 py-3 text-lg">
-            Send
-          </BigButton>
-        </form>
-        <div className="mt-3 flex gap-2">
-          {["😂", "👏", "👍"].map((emoji) => (
-            <button
-              key={emoji}
-              className="text-3xl"
-              onClick={() => void sendTeamEmojiAction(props.roomCode, emoji)}
-              type="button"
-            >
-              {emoji}
-            </button>
-          ))}
-        </div>
       </Panel>
     </div>
+  );
+}
+
+export function ComposingStage(props: { view: PlayerView }) {
+  const words = props.view.composingWords;
+  return (
+    <Panel tone="blue" title="Composing" className="text-center">
+      <p className="pt-4 text-3xl">
+        {props.view.team ? `Team ${props.view.team.name} is` : "Every team is"}{" "}
+        putting their words together…
+      </p>
+      {props.view.prompt?.text ? (
+        <p className="mx-auto mt-4 max-w-2xl text-lg text-stone-500">{props.view.prompt.text}</p>
+      ) : null}
+      {words && words.length > 0 ? (
+        <>
+          <p className="mt-8 text-sm font-bold uppercase tracking-wide text-stone-500">
+            Off to the AI, in this order
+          </p>
+          <ol className="mx-auto mt-4 flex max-w-2xl flex-wrap justify-center gap-3">
+            {words.map((word, index) => (
+              <li
+                key={`${word.text}-${index}`}
+                className="rounded-2xl border-2 border-comic-ink bg-white px-4 py-2"
+              >
+                <span className="text-xl font-bold text-stone-900">{word.text}</span>
+                <span className="ml-2 text-sm text-stone-500">{word.displayName}</span>
+              </li>
+            ))}
+          </ol>
+        </>
+      ) : null}
+    </Panel>
   );
 }
 
@@ -148,6 +170,9 @@ export function RevealStage(props: { view: PlayerView; roomCode: string }) {
       title={`Team ${reveal?.teamName ?? ""}`}
       className="relative overflow-hidden text-center"
     >
+      {props.view.prompt?.text ? (
+        <p className="mx-auto max-w-3xl text-lg text-stone-500">{props.view.prompt.text}</p>
+      ) : null}
       <div className="mx-auto max-w-3xl space-y-4 py-6">
         {reveal?.visibleSegments.map((segment, index) =>
           segment.type === "static" ? (
@@ -203,15 +228,99 @@ export function VotingBoard(props: { view: PlayerView; roomCode: string }) {
 }
 
 export function StandingsBoard(props: { view: PlayerView }) {
+  const rows = [...(props.view.standings ?? [])].sort((a, b) => b.totalScore - a.totalScore);
   return (
     <Panel tone="red" title="Standings">
-      <ul className="space-y-3 text-3xl">
-        {props.view.standings?.map((row) => (
+      <ul className="space-y-6">
+        {rows.map((row) => (
           <li key={row.teamId}>
-            Team {row.teamName}: {row.wins}
+            <div className="flex items-baseline justify-between text-3xl">
+              <span>Team {row.teamName}</span>
+              <span>
+                {row.totalScore} pts <span className="text-lg text-stone-500">- {row.roundsWon} round{row.roundsWon === 1 ? "" : "s"} won</span>
+              </span>
+            </div>
+            {row.lastComposition ? (
+              <p className="mt-2 text-xl text-stone-700">
+                {row.lastComposition.map((segment, index) =>
+                  segment.type === "contribution" ? (
+                    <strong key={index}>{segment.text}</strong>
+                  ) : (
+                    <span key={index}>{segment.text}</span>
+                  ),
+                )}
+              </p>
+            ) : null}
+            {row.lastRound ? (
+              <div className="mt-2 flex flex-wrap gap-2 text-sm text-stone-600">
+                <span className="rounded-full bg-stone-200 px-3 py-1">Words +{row.lastRound.wordPoints}</span>
+                {row.lastRound.comboBonuses.map((combo, index) => (
+                  <span key={`${combo.type}-${index}`} className="rounded-full bg-amber-200 px-3 py-1">
+                    {combo.type.replace("_", " ")} +{combo.points}
+                  </span>
+                ))}
+                {row.lastRound.promptBonus > 0 ? (
+                  <span className="rounded-full bg-blue-200 px-3 py-1">Prompt +{row.lastRound.promptBonus}</span>
+                ) : null}
+                {row.lastRound.cohesionBonus > 0 ? (
+                  <span className="rounded-full bg-blue-200 px-3 py-1">Cohesion +{row.lastRound.cohesionBonus}</span>
+                ) : null}
+                {row.lastRound.crowdFavoriteBonus > 0 ? (
+                  <span className="rounded-full bg-pink-200 px-3 py-1">Crowd favorite +{row.lastRound.crowdFavoriteBonus}</span>
+                ) : null}
+                <span className="rounded-full bg-stone-900 px-3 py-1 text-white">
+                  Placement +{row.lastRound.placementPoints}
+                </span>
+              </div>
+            ) : null}
+            {row.lastRound?.sabotage ? (
+              <p className="mt-2 text-sm font-bold text-purple-700">
+                {row.lastRound.sabotage.direction === "sent"
+                  ? `Sabotage: ${row.lastRound.sabotage.playerDisplayName}'s word "${row.lastRound.sabotage.text}" was smuggled into another team's verse.`
+                  : `Sabotage: this team snuck in "${row.lastRound.sabotage.text}" from a rival team.`}
+              </p>
+            ) : null}
           </li>
         ))}
       </ul>
     </Panel>
+  );
+}
+
+export function GameOverStage(props: { view: PlayerView }) {
+  const bestVerse = props.view.bestVerse;
+  const winner = props.view.winner;
+  return (
+    <div className="space-y-6">
+      {bestVerse ? (
+        <Panel tone="blue" title="Best Verse of the Game" className="text-center">
+          <p className="mx-auto max-w-2xl text-lg text-stone-500">{bestVerse.promptText}</p>
+          <p className="mx-auto mt-4 max-w-2xl text-3xl font-bold text-stone-900">
+            {bestVerse.segments.map((segment, index) =>
+              segment.type === "contribution" ? (
+                <strong key={index}>{segment.text}</strong>
+              ) : (
+                <span key={index}>{segment.text}</span>
+              ),
+            )}
+          </p>
+          <p className="mt-4 text-xl text-stone-600">
+            Team {bestVerse.teamName} &middot; {bestVerse.score} pts
+          </p>
+        </Panel>
+      ) : null}
+      {winner ? (
+        <Panel tone="red" title="Winner" className="text-center">
+          <p className="text-5xl">🏆</p>
+          <p className="mt-4 text-4xl font-black">
+            {winner.teamNames.length > 1
+              ? `${winner.teamNames.map((name) => `Team ${name}`).join(" & ")} tie!`
+              : `Team ${winner.teamNames[0]} wins!`}
+          </p>
+          <p className="mt-2 text-xl text-stone-600">{winner.totalScore} pts</p>
+        </Panel>
+      ) : null}
+      <StandingsBoard view={props.view} />
+    </div>
   );
 }

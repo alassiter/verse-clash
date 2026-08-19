@@ -127,24 +127,6 @@ export async function submitChoiceAction(roomCode: string, optionId: string) {
   }
 }
 
-export async function sendTeamMessageAction(roomCode: string, body: string) {
-  try {
-    getRoomCommands().sendTeamMessage(await actorFromCookies(), roomCode, body);
-    return { ok: true as const };
-  } catch (error) {
-    return fail(error);
-  }
-}
-
-export async function sendTeamEmojiAction(roomCode: string, emoji: string) {
-  try {
-    getRoomCommands().sendTeamEmoji(await actorFromCookies(), roomCode, emoji);
-    return { ok: true as const };
-  } catch (error) {
-    return fail(error);
-  }
-}
-
 export async function pauseAction(roomCode: string) {
   try {
     getRoomCommands().pause(await actorFromCookies(), roomCode);

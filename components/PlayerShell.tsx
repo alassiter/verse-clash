@@ -1,9 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { getPlayerViewAction, joinRoomAction } from "@/app/actions/room";
 import type { PlayerView } from "@/lib/game";
 import {
+  ComposingStage,
+  GameOverStage,
   Lobby,
   PromptStage,
   RevealStage,
@@ -13,22 +16,48 @@ import {
 } from "@/components/play-surfaces";
 import { BigButton, Countdown, Panel, PhaseBanner } from "@/components/ui";
 
+// After a room we were already connected to starts failing to load this many
+// polls in a row (~2.4s), treat it as the session having timed out — the
+// in-memory game state is gone (server restart, expired room) — and bail
+// back to the landing page rather than leaving the player on a dead screen.
+const TIMEOUT_FAIL_THRESHOLD = 3;
+
 export function PlayerShell(props: { roomCode: string }) {
   const [view, setView] = useState<PlayerView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [name, setName] = useState("");
+  const router = useRouter();
+  const hasConnectedRef = useRef(false);
+  const failCountRef = useRef(0);
 
   useEffect(() => {
     let cancelled = false;
+    function noteFailure(message: string) {
+      setError(message);
+      if (hasConnectedRef.current) {
+        failCountRef.current += 1;
+        if (failCountRef.current >= TIMEOUT_FAIL_THRESHOLD) {
+          router.replace("/");
+        }
+      }
+    }
     async function tick() {
-      const result = await getPlayerViewAction(props.roomCode);
+      let result: Awaited<ReturnType<typeof getPlayerViewAction>>;
+      try {
+        result = await getPlayerViewAction(props.roomCode);
+      } catch {
+        if (!cancelled) noteFailure("Lost connection to the server.");
+        return;
+      }
       if (cancelled) return;
       if (result.ok) {
+        hasConnectedRef.current = true;
+        failCountRef.current = 0;
         setView(result.view);
         setError(null);
         window.localStorage.setItem("verse-clash-room", props.roomCode);
       } else {
-        setError(result.error);
+        noteFailure(result.error);
       }
     }
     void tick();
@@ -37,7 +66,7 @@ export function PlayerShell(props: { roomCode: string }) {
       cancelled = true;
       window.clearInterval(id);
     };
-  }, [props.roomCode]);
+  }, [props.roomCode, router]);
 
   if (error && !view) {
     return (
@@ -93,11 +122,11 @@ export function PlayerShell(props: { roomCode: string }) {
             <TeamRoom view={view} roomCode={props.roomCode} />
           )
         ) : null}
+        {view.phase === "composing" ? <ComposingStage view={view} /> : null}
         {view.phase === "reveal" ? <RevealStage view={view} roomCode={props.roomCode} /> : null}
         {view.phase === "voting" ? <VotingBoard view={view} roomCode={props.roomCode} /> : null}
-        {view.phase === "standings" || view.phase === "ended" ? (
-          <StandingsBoard view={view} />
-        ) : null}
+        {view.phase === "standings" ? <StandingsBoard view={view} /> : null}
+        {view.phase === "ended" ? <GameOverStage view={view} /> : null}
         {view.isHost ? (
           <p className="mt-8 text-lg">
             <a className="underline" href={`/room/${props.roomCode}/host`}>

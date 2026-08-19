@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   createGame,
   enterSelecting,
+  flushAsync,
   host,
   jo,
   lee,
@@ -14,21 +15,21 @@ function seatPriyaAndSamTogether(commands: ReturnType<typeof createGame>["comman
   const goblin = commands
     .getHostView(host, roomCode)
     .teams.find((team) => team.id === "goblin");
-  if (!goblin) throw new Error("missing Goblin");
+  if (!goblin) throw new Error("missing Red team");
   commands.movePlayer(host, roomCode, priya.id, goblin.id);
   commands.movePlayer(host, roomCode, sam.id, goblin.id);
 }
 
 describe("hidden selection in a team room", () => {
-  it("starts Round 1 on the first authored prompt", () => {
+  it("starts Round 1 on the previewed prompt, chosen at random per room", () => {
     const { commands, advanceTime } = createGame();
     const roomCode = openLobby(commands);
     const preview = commands.getHostView(host, roomCode).promptPreview;
-    expect(preview?.text).toBe("Announce the company's new strategic vision.");
+    expect(preview?.text).toBeTruthy();
     expect(preview?.wordPools.length).toBeGreaterThan(0);
     commands.startRound(host, roomCode);
     const player = commands.getPlayerView(priya, roomCode);
-    expect(player.prompt?.text).toBe("Announce the company's new strategic vision.");
+    expect(player.prompt?.text).toBe(preview?.text);
     expect(player.selection).toBeUndefined();
     advanceTime(12_001);
     commands.heartbeat(host, roomCode);
@@ -81,29 +82,7 @@ describe("hidden selection in a team room", () => {
     expect(samView.teammates.find((mate) => mate.id === priya.id)?.options).toBeUndefined();
   });
 
-  it("isolates team chat and team emojis", () => {
-    const { commands, advanceTime } = createGame();
-    const roomCode = openLobby(commands);
-    seatPriyaAndSamTogether(commands, roomCode);
-    const waffleTeam = commands
-      .getHostView(host, roomCode)
-      .teams.find((team) => team.id === "waffle");
-    if (!waffleTeam) throw new Error("missing Waffle");
-    commands.movePlayer(host, roomCode, lee.id, waffleTeam.id);
-    enterSelecting(commands, advanceTime, roomCode);
-    commands.sendTeamMessage(priya, roomCode, "someone pick something normal");
-    commands.sendTeamEmoji(priya, roomCode, "👏");
-
-    const goblin = commands.getPlayerView(priya, roomCode);
-    const waffle = commands.getPlayerView(lee, roomCode);
-    expect(goblin.teamChat.map((message) => message.body)).toEqual([
-      "someone pick something normal",
-      "👏",
-    ]);
-    expect(waffle.teamChat).toEqual([]);
-  });
-
-  it("pauses the timer and fills unsubmitted players from their dealt set when selecting ends", () => {
+  it("pauses the timer and fills unsubmitted players from their dealt set when selecting ends", async () => {
     const { commands, advanceTime } = createGame();
     const roomCode = openLobby(commands);
     enterSelecting(commands, advanceTime, roomCode);
@@ -123,6 +102,7 @@ describe("hidden selection in a team room", () => {
     advanceTime(90_001);
     expect(commands.getPlayerView(priya, roomCode).phase).toBe("selecting");
     commands.heartbeat(host, roomCode);
+    await flushAsync();
     const after = commands.getPlayerView(priya, roomCode);
     expect(after.phase).toBe("reveal");
     expect(dealt).toContain(after.selection?.selectedOptionId);
@@ -137,7 +117,7 @@ describe("hidden selection in a team room", () => {
     const goblin = commands
       .getHostView(host, roomCode)
       .teams.find((team) => team.id === "goblin");
-    if (!goblin) throw new Error("missing Goblin");
+    if (!goblin) throw new Error("missing Red team");
     commands.movePlayer(host, roomCode, sam.id, goblin.id);
     commands.movePlayer(host, roomCode, lee.id, goblin.id);
     commands.movePlayer(host, roomCode, jo.id, goblin.id);

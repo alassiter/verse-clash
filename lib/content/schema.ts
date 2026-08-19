@@ -3,12 +3,14 @@ import {
   GRAMMATICAL_ROLES,
   SEMANTIC_CATEGORIES,
   TONES,
+  WORD_RARITIES,
 } from "@/lib/content/types";
 
 const grammaticalRole = z.enum(GRAMMATICAL_ROLES);
 const semanticCategory = z.enum(SEMANTIC_CATEGORIES);
 const tone = z.enum(TONES);
 const intensity = z.union([z.literal(1), z.literal(2), z.literal(3)]);
+const wordRarity = z.enum(WORD_RARITIES);
 
 export const promptSchema = z.object({
   id: z.string().min(1),
@@ -58,6 +60,7 @@ export const wordSchema = z.object({
   tone: z.string().min(1),
   intensity,
   chaos: z.number(),
+  rarity: wordRarity,
   workplaceSafe: z.literal(true),
   bannedPairCategories: z.array(z.string()).optional(),
   compatiblePromptIds: z.array(z.string()).optional(),

@@ -230,7 +230,7 @@ write_local_env() {
   chmod 600 "$ENV_FILE" 2>/dev/null || true
 }
 
-TOTAL_STAGES=8
+TOTAL_STAGES=9
 
 banner "Verse Clash — prepare production"
 
@@ -272,7 +272,22 @@ write_local_env NEXT_PUBLIC_SUPABASE_ANON_KEY "$NEXT_PUBLIC_SUPABASE_ANON_KEY"
 write_local_env SUPABASE_SERVICE_ROLE_KEY "$SUPABASE_SERVICE_ROLE_KEY"
 require_secrets_untracked
 
-# ── 4. Anonymous auth ─────────────────────────────────────────────────────
+# ── 4. Anthropic API key ──────────────────────────────────────────────────
+stage "Anthropic API key for round composition"
+say "Rounds ask Claude to assemble each team's submitted words into a verse and judge them."
+say "Without this key, rounds fall back to deterministic template-filling — the game still works, just less lively."
+open_url "https://console.anthropic.com/settings/keys"
+step "Create a key (or reuse one) and copy it."
+note "Never put this secret in the repo, a commit, or client-side code."
+ask_secret ANTHROPIC_API_KEY "Paste the Anthropic API key (Enter to skip):"
+if [[ -n "${ANTHROPIC_API_KEY:-}" ]]; then
+  write_local_env ANTHROPIC_API_KEY "$ANTHROPIC_API_KEY"
+else
+  SKIPPED+=("Add ANTHROPIC_API_KEY — rounds will use the deterministic fallback composer")
+fi
+require_secrets_untracked
+
+# ── 5. Anonymous auth ─────────────────────────────────────────────────────
 stage "Enable Anonymous sign-ins"
 say "Players join with a room code and display name — no email accounts."
 if [[ -n "${NEXT_PUBLIC_SUPABASE_URL:-}" ]]; then
@@ -285,7 +300,7 @@ step "Find Allow anonymous sign-ins and turn it on. Save if the page asks."
 note "CAPTCHA is optional later if anonymous sign-ups get abused."
 pause "Anonymous sign-ins enabled?"
 
-# ── 5. Schema migration ───────────────────────────────────────────────────
+# ── 6. Schema migration ───────────────────────────────────────────────────
 stage "Apply the game schema"
 say "Run the in-repo migration so rooms, RLS, and Realtime publication exist."
 if [[ -n "${NEXT_PUBLIC_SUPABASE_URL:-}" ]]; then
@@ -302,7 +317,7 @@ if ! confirm "Did the migration run without errors?"; then
   warn "schema not applied — hosted rooms will not work until it is"
 fi
 
-# ── 6. Vercel project ─────────────────────────────────────────────────────
+# ── 7. Vercel project ─────────────────────────────────────────────────────
 stage "Import the repo on Vercel"
 say "Next.js production for this app is Vercel. Import the GitHub repo; do not paste secrets into the repo."
 open_url "https://vercel.com/new"
@@ -313,9 +328,9 @@ step "Create the project. The first deploy may boot without Supabase keys; that 
 ask VERCEL_PROJECT_URL "Paste the Vercel project URL (https://vercel.com/…/…):"
 note "Used only to open the next page. Not written to $ENV_FILE."
 
-# ── 7. Vercel env vars ────────────────────────────────────────────────────
+# ── 8. Vercel env vars ────────────────────────────────────────────────────
 stage "Put secrets on Vercel, not in git"
-say "Vercel encrypts env vars. Mark the service-role key Sensitive so the dashboard cannot show it later."
+say "Vercel encrypts env vars. Mark the service-role and Anthropic keys Sensitive so the dashboard cannot show them later."
 say "Preview deploys will share this same Supabase project."
 if [[ -n "${VERCEL_PROJECT_URL:-}" ]]; then
   open_url "${VERCEL_PROJECT_URL%/}/settings/environment-variables"
@@ -326,14 +341,17 @@ fi
 step "Add NEXT_PUBLIC_SUPABASE_URL — the Project URL from earlier. Environments: Production and Preview."
 step "Add NEXT_PUBLIC_SUPABASE_ANON_KEY — the publishable/anon key. Production and Preview."
 step "Add SUPABASE_SERVICE_ROLE_KEY — the secret/service_role key. Production and Preview. Turn on Sensitive."
+if [[ -n "${ANTHROPIC_API_KEY:-}" ]]; then
+  step "Add ANTHROPIC_API_KEY — the key from the Anthropic step. Production and Preview. Turn on Sensitive."
+fi
 step "Do not upload .env.local, do not commit it, and do not add these to GitHub Actions secrets."
-if ! confirm "Are all three variables saved on Vercel?"; then
-  SKIPPED+=("Add NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY on Vercel (Sensitive for the service-role key)")
-  warn "Vercel env vars not confirmed — production will not see Supabase"
+if ! confirm "Are the Supabase variables (and ANTHROPIC_API_KEY, if you set one) saved on Vercel?"; then
+  SKIPPED+=("Add NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, ANTHROPIC_API_KEY on Vercel (Sensitive for the service-role and Anthropic keys)")
+  warn "Vercel env vars not confirmed — production will not see Supabase or Claude"
 fi
 require_secrets_untracked
 
-# ── 8. Production deploy ──────────────────────────────────────────────────
+# ── 9. Production deploy ──────────────────────────────────────────────────
 stage "Redeploy production"
 say "Env var changes apply only to the next deployment."
 if confirm "Redeploy production now?"; then

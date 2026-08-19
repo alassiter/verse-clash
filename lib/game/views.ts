@@ -1,7 +1,9 @@
 import type { ContentPack } from "@/lib/content";
+import { CHAOS_CARD_COPY } from "@/lib/content/chaosCards";
 import { slotsForTemplate } from "@/lib/content/deal";
-import { current } from "@/lib/game/phase";
+import { buildTeamFills, current } from "@/lib/game/phase";
 import {
+  AUTO_FILL_PLAYER_PREFIX,
   currentRound,
   DISCONNECT_AFTER_MS,
   type PlayerState,
@@ -16,6 +18,7 @@ const PHASE_COPY: Record<
   gathering: { name: "Gathering", instruction: "Waiting for the host to start" },
   prompt_reveal: { name: "Prompt", instruction: "Read the shared prompt" },
   selecting: { name: "Selecting", instruction: "Choose one option" },
+  composing: { name: "Composing", instruction: "The verses are being assembled" },
   reveal: { name: "Reveal", instruction: "Watch the shared stage" },
   voting: { name: "Voting", instruction: "Pick a Crowd Favorite" },
   standings: { name: "Standings", instruction: "See which team is ahead" },
@@ -37,20 +40,23 @@ function teammates(
   const hideWords =
     phase === "gathering" ||
     phase === "prompt_reveal" ||
-    phase === "selecting";
+    phase === "selecting" ||
+    phase === "composing";
   return room.players
     .filter((mate) => mate.teamId === player.teamId)
     .map((mate) => {
-      const assignment = round?.assignments.find(
-        (entry) => entry.playerId === mate.id,
-      );
+      const mateAssignments =
+        round?.assignments.filter((entry) => entry.playerId === mate.id) ?? [];
+      const assignment = mateAssignments.find((entry) => !entry.submittedAt) ?? mateAssignments[0];
+      const allSubmitted =
+        mateAssignments.length > 0 && mateAssignments.every((entry) => entry.submittedAt);
       const selected = assignment?.options.find(
         (option) => option.id === assignment.selectedOptionId,
       );
       const view: TeammateView = {
         id: mate.id,
         displayName: mate.displayName,
-        submitted: Boolean(assignment?.submittedAt),
+        submitted: allSubmitted,
       };
       if (!hideWords && mate.id !== player.id) {
         view.selectedText = selected?.text;
@@ -75,9 +81,8 @@ export function playerView(
   const prompt = round
     ? pack.prompts.find((entry) => entry.id === round.promptId)
     : undefined;
-  const assignment = round?.assignments.find(
-    (entry) => entry.playerId === player.id,
-  );
+  const ownAssignments = round?.assignments.filter((entry) => entry.playerId === player.id) ?? [];
+  const assignment = ownAssignments.find((entry) => !entry.submittedAt) ?? ownAssignments[0];
   const waitingForNextRound = Boolean(
     round &&
       phase !== "gathering" &&
@@ -100,17 +105,13 @@ export function playerView(
       ? { id: team.id, name: team.name, teammates: mateViews }
       : null,
     teammates: mateViews,
-    teamChat: player.teamId
-      ? room.teamMessages
-          .filter((message) => message.teamId === player.teamId)
-          .map((message) => ({
-            playerName:
-              room.players.find((entry) => entry.id === message.playerId)
-                ?.displayName ?? "Unknown",
-            body: message.body,
-          }))
-      : [],
     waitingForNextRound: waitingForNextRound || undefined,
+    soloAutoFill:
+      team && round
+        ? round.assignments.some(
+            (entry) => entry.playerId === `${AUTO_FILL_PLAYER_PREFIX}${team.id}`,
+          ) || undefined
+        : undefined,
   };
 
   if (view.phase === "gathering") {
@@ -132,6 +133,11 @@ export function playerView(
     };
   }
 
+  if (round?.chaosCard && view.phase !== "gathering") {
+    const copy = CHAOS_CARD_COPY[round.chaosCard];
+    view.chaosCard = { id: round.chaosCard, name: copy.name, description: copy.description };
+  }
+
   if (assignment && phase !== "gathering" && phase !== "prompt_reveal") {
     view.selection = {
       playerLabel: assignment.playerLabel,
@@ -141,8 +147,14 @@ export function playerView(
     };
   }
 
-  if (view.phase === "reveal" || view.phase === "voting" || view.phase === "standings") {
-    view.teamChatPrimary = false;
+  if (round && team && view.phase === "composing") {
+    const teamFills = buildTeamFills(room, round, pack).find(
+      (entry) => entry.teamId === team.id,
+    );
+    view.composingWords = teamFills?.fills.map((fill) => ({
+      text: fill.text,
+      displayName: fill.displayName,
+    }));
   }
 
   if (round && view.phase === "reveal") {
@@ -176,11 +188,60 @@ export function playerView(
     view.standings = room.teams.map((entry) => ({
       teamId: entry.id,
       teamName: entry.name,
-      wins: entry.wins,
+      totalScore: entry.totalScore,
+      roundsWon: entry.roundsWon,
+      lastRound: round?.scoring?.find((score) => score.teamId === entry.id),
+      lastComposition: round?.compositions.find((composition) => composition.teamId === entry.id)?.segments,
     }));
   }
 
+  if (view.phase === "ended") {
+    view.bestVerse = findBestVerse(room, pack);
+    view.winner = findWinner(room);
+  }
+
   return view;
+}
+
+// The single highest-scoring team-verse across every round played, shown on
+// the final "ended" screen as the game's highlight.
+function findBestVerse(
+  room: RoomState,
+  pack: ContentPack,
+): PlayerView["bestVerse"] {
+  let bestRoundIndex = -1;
+  let bestTeamId = "";
+  let bestScore = -Infinity;
+  for (let roundIndex = 0; roundIndex < room.rounds.length; roundIndex += 1) {
+    for (const score of room.rounds[roundIndex].scoring ?? []) {
+      if (score.totalRoundScore > bestScore) {
+        bestRoundIndex = roundIndex;
+        bestTeamId = score.teamId;
+        bestScore = score.totalRoundScore;
+      }
+    }
+  }
+  if (bestRoundIndex === -1) return undefined;
+  const bestRound = room.rounds[bestRoundIndex];
+  const prompt = pack.prompts.find((entry) => entry.id === bestRound.promptId);
+  const composition = bestRound.compositions.find((entry) => entry.teamId === bestTeamId);
+  const teamName = room.teams.find((entry) => entry.id === bestTeamId)?.name;
+  if (!prompt || !composition || !teamName) return undefined;
+  return {
+    promptText: prompt.text,
+    teamName,
+    segments: composition.segments,
+    score: bestScore,
+  };
+}
+
+function findWinner(room: RoomState): PlayerView["winner"] {
+  if (room.teams.length === 0) return undefined;
+  const topScore = Math.max(...room.teams.map((team) => team.totalScore));
+  const teamNames = room.teams
+    .filter((team) => team.totalScore === topScore)
+    .map((team) => team.name);
+  return { teamNames, totalScore: topScore };
 }
 
 export function hostView(
@@ -189,7 +250,8 @@ export function hostView(
   pack: ContentPack,
   now: number,
 ): HostView {
-  const upcoming = pack.prompts[room.promptCursor % pack.prompts.length];
+  const upcoming =
+    pack.prompts.find((prompt) => prompt.id === room.nextPromptId) ?? pack.prompts[0];
   const templateId = upcoming.compatibleTemplateIds[0];
   const slots = slotsForTemplate(pack, templateId);
   const phase = current(room);

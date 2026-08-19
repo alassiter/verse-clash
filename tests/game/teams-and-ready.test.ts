@@ -20,12 +20,12 @@ describe("seat teams and ready up", () => {
       .players.filter((player) => !player.isHost)
       .map((player) => `${player.displayName}:${player.teamName}`);
     expect(names).toEqual([
-      "Priya:Stapler",
-      "Sam:Goblin",
-      "Lee:Waffle",
-      "Jo:Penguin",
+      "Priya:Yellow",
+      "Sam:Red",
+      "Lee:Blue",
+      "Jo:Green",
     ]);
-    expect(commands.getPlayerView(priya, created.roomCode).team?.name).toBe("Stapler");
+    expect(commands.getPlayerView(priya, created.roomCode).team?.name).toBe("Yellow");
   });
 
   it("lets the host shuffle and move a player, but not seat themselves", () => {
@@ -38,17 +38,17 @@ describe("seat teams and ready up", () => {
       afterShuffle
         .filter((player) => !player.isHost)
         .every((player) =>
-          ["Goblin", "Waffle", "Penguin", "Stapler"].includes(player.teamName ?? ""),
+          ["Red", "Blue", "Green", "Yellow"].includes(player.teamName ?? ""),
         ),
     ).toBe(true);
     expect(afterShuffle.find((player) => player.isHost)?.teamName).toBeNull();
 
     const waffle = commands
       .getHostView(host, roomCode)
-      .teams.find((team) => team.name === "Waffle");
-    if (!waffle) throw new Error("missing Waffle");
+      .teams.find((team) => team.name === "Blue");
+    if (!waffle) throw new Error("missing Blue team");
     commands.movePlayer(host, roomCode, priya.id, waffle.id);
-    expect(commands.getPlayerView(priya, roomCode).team?.name).toBe("Waffle");
+    expect(commands.getPlayerView(priya, roomCode).team?.name).toBe("Blue");
 
     expect(() => commands.movePlayer(host, roomCode, host.id, waffle.id)).toThrow(
       RoomError,

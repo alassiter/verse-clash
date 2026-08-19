@@ -1,4 +1,13 @@
-import { current, enter, leave, tick, type PhaseContext } from "@/lib/game/phase";
+import { assembleComposition } from "@/lib/content";
+import {
+  current,
+  enter,
+  leave,
+  pickNextPrompt,
+  tick,
+  type AiHooks,
+  type PhaseContext,
+} from "@/lib/game/phase";
 import {
   currentRound,
   REVEAL_EMOJIS,
@@ -6,8 +15,31 @@ import {
   type PlayerState,
   type RoomState,
 } from "@/lib/game/state";
-import type { Actor, RoomCommandDeps, RoomCommands } from "@/lib/game/types";
+import type {
+  Actor,
+  AiComposer,
+  ComposeJudgeInput,
+  ComposeJudgeResult,
+  RoomCommandDeps,
+  RoomCommands,
+} from "@/lib/game/types";
 import { hostView, playerView } from "@/lib/game/views";
+
+function defaultComposeAndJudge(
+  pack: RoomCommandDeps["pack"],
+): AiComposer["composeAndJudge"] {
+  return async (input: ComposeJudgeInput): Promise<ComposeJudgeResult> => ({
+    requestId: input.requestId,
+    compositions: input.teams.map((team) => ({
+      teamId: team.teamId,
+      segments: assembleComposition(pack, {
+        templateId: input.templateId,
+        fills: team.fills,
+      }).segments,
+      source: "deterministic_fallback" as const,
+    })),
+  });
+}
 
 export class RoomError extends Error {
   constructor(
@@ -63,10 +95,18 @@ export function createRoomCommands(deps: RoomCommandDeps): RoomCommands {
   const now = () => deps.clock.now();
   let codeSerial = 0;
 
+  const composeAndJudge = deps.ai?.composeAndJudge ?? defaultComposeAndJudge(pack);
+  const ai: AiHooks = {
+    composeAndJudge,
+    getRoom: (roomId: string) => rooms.get(roomId),
+    now,
+  };
+
   const ctxFor = (at: number): PhaseContext => ({
     pack,
     random: deps.random,
     now: at,
+    ai,
   });
 
   const roomAfterTick = (roomCode: string): RoomState => {
@@ -92,8 +132,8 @@ export function createRoomCommands(deps: RoomCommandDeps): RoomCommands {
         paused: false,
         pauseStartedAt: null,
         contentMode: "work_safe",
-        promptCursor: 0,
-        teams: TEAM_SEEDS.map((seed) => ({ ...seed, wins: 0 })),
+        nextPromptId: pickNextPrompt(pack, deps.random, null).id,
+        teams: TEAM_SEEDS.map((seed) => ({ ...seed, totalScore: 0, roundsWon: 0 })),
         players: [
           {
             id: actor.id,
@@ -106,7 +146,6 @@ export function createRoomCommands(deps: RoomCommandDeps): RoomCommands {
           },
         ],
         rounds: [],
-        teamMessages: [],
       };
       rooms.set(code, room);
       return { roomCode: code, url: deps.roomUrl(code) };
@@ -148,6 +187,7 @@ export function createRoomCommands(deps: RoomCommandDeps): RoomCommands {
     heartbeat(actor, roomCode) {
       const room = roomAfterTick(roomCode);
       touch(requirePlayer(room, actor), now());
+      deps.onHeartbeat?.();
     },
 
     setReady(actor, roomCode, ready) {
@@ -203,13 +243,12 @@ export function createRoomCommands(deps: RoomCommandDeps): RoomCommands {
         throw new RoomError("wrong_phase", "Selection is not open.");
       }
       const assignment = round.assignments.find(
-        (entry) => entry.playerId === player.id,
+        (entry) => entry.playerId === player.id && !entry.submittedAt,
       );
       if (!assignment) {
+        const hasAnyAssignment = round.assignments.some((entry) => entry.playerId === player.id);
+        if (hasAnyAssignment) return;
         throw new RoomError("no_assignment", "Wait for the next round.");
-      }
-      if (assignment.submittedAt) {
-        return;
       }
       if (!assignment.options.some((option) => option.id === optionId)) {
         throw new RoomError("bad_option", "That option was not dealt to you.");
@@ -223,23 +262,6 @@ export function createRoomCommands(deps: RoomCommandDeps): RoomCommands {
       ) {
         leave(room, ctxFor(now()));
       }
-    },
-
-    sendTeamMessage(actor, roomCode, body) {
-      const room = roomAfterTick(roomCode);
-      const player = requirePlayer(room, actor);
-      if (!player.teamId) {
-        throw new RoomError("no_team", "Join a team to chat.");
-      }
-      room.teamMessages.push({
-        teamId: player.teamId,
-        playerId: player.id,
-        body,
-      });
-    },
-
-    sendTeamEmoji(actor, roomCode, emoji) {
-      commands.sendTeamMessage(actor, roomCode, emoji);
     },
 
     pause(actor, roomCode) {

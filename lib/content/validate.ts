@@ -3,24 +3,28 @@ import { DealError, slotsForTemplate, wordsForSlot } from "@/lib/content/deal";
 import { contentPackSchema } from "@/lib/content/schema";
 import type {
   ContentPack,
+  Prompt,
   Slot,
   ValidationIssue,
   ValidationResult,
 } from "@/lib/content/types";
 
+function promptTexts(prompt: Prompt): Array<{ text: string; path: string }> {
+  const texts: Array<{ text: string; path: string }> = [
+    { text: prompt.text, path: `prompts.${prompt.id}.text` },
+  ];
+  if (prompt.tease) {
+    texts.push({ text: prompt.tease, path: `prompts.${prompt.id}.tease` });
+  }
+  return texts;
+}
+
 function collectTexts(pack: {
-  prompts: ContentPack["prompts"];
   templates: ContentPack["templates"];
   slots: ContentPack["slots"];
   words: ContentPack["words"];
 }): Array<{ text: string; path: string }> {
   const texts: Array<{ text: string; path: string }> = [];
-  for (const prompt of pack.prompts) {
-    texts.push({ text: prompt.text, path: `prompts.${prompt.id}.text` });
-    if (prompt.tease) {
-      texts.push({ text: prompt.tease, path: `prompts.${prompt.id}.tease` });
-    }
-  }
   for (const template of pack.templates) {
     for (const [index, segment] of template.segments.entries()) {
       if (segment.type === "static") {
@@ -107,6 +111,52 @@ function canDealTemplate(
   return null;
 }
 
+/**
+ * Validates a single prompt against a pack without requiring it to already be
+ * registered in pack.prompts — used both for full-pack validation and for
+ * gating incrementally generated prompts before they're added to the runtime
+ * pool (see lib/ai/promptGenerator.ts).
+ */
+export function validatePromptCandidate(
+  pack: ContentPack,
+  candidate: Prompt,
+  options: { maxTeamSize?: number } = {},
+): ValidationIssue[] {
+  const maxTeamSize = options.maxTeamSize ?? 4;
+  const issues: ValidationIssue[] = [];
+  const templateById = new Map(pack.templates.map((template) => [template.id, template]));
+
+  if (candidate.compatibleTemplateIds.some((id) => !templateById.has(id))) {
+    issues.push({
+      code: "missing_template",
+      message: `Prompt ${candidate.id} references an unknown template.`,
+      path: `prompts.${candidate.id}`,
+    });
+  }
+
+  for (const { text, path } of promptTexts(candidate)) {
+    for (const term of pack.safety.blockedTerms) {
+      if (text.toLowerCase().includes(term.toLowerCase())) {
+        issues.push({
+          code: "blocked_term",
+          message: `Blocked term "${term}" found in authored text.`,
+          path,
+        });
+      }
+    }
+  }
+
+  for (const templateId of candidate.compatibleTemplateIds) {
+    if (!templateById.has(templateId)) continue;
+    const dealIssue = canDealTemplate(pack, templateId, candidate.id, maxTeamSize);
+    if (dealIssue) {
+      issues.push(dealIssue);
+    }
+  }
+
+  return issues;
+}
+
 export function validateContentPack(
   input: unknown,
   options: { maxTeamSize?: number } = {},
@@ -139,17 +189,10 @@ export function validateContentPack(
     contentMode: data.safety.contentMode,
   };
 
-  const templateById = new Map(pack.templates.map((template) => [template.id, template]));
   const slotById = new Map(pack.slots.map((slot) => [slot.id, slot]));
 
   for (const prompt of pack.prompts) {
-    if (prompt.compatibleTemplateIds.some((id) => !templateById.has(id))) {
-      issues.push({
-        code: "missing_template",
-        message: `Prompt ${prompt.id} references an unknown template.`,
-        path: `prompts.${prompt.id}`,
-      });
-    }
+    issues.push(...validatePromptCandidate(pack, prompt, { maxTeamSize }));
   }
 
   for (const template of pack.templates) {
@@ -172,16 +215,6 @@ export function validateContentPack(
           message: `Blocked term "${term}" found in authored text.`,
           path,
         });
-      }
-    }
-  }
-
-  for (const prompt of pack.prompts) {
-    for (const templateId of prompt.compatibleTemplateIds) {
-      if (!templateById.has(templateId)) continue;
-      const dealIssue = canDealTemplate(pack, templateId, prompt.id, maxTeamSize);
-      if (dealIssue) {
-        issues.push(dealIssue);
       }
     }
   }
