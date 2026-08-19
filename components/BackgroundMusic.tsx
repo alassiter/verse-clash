@@ -12,24 +12,30 @@ export function BackgroundMusic() {
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
+
     audio.volume = VOLUME;
+
+    let cancelled = false;
+    const resume = () => {
+      if (cancelled || getMutedSnapshot()) return;
+      void audio.play();
+    };
 
     if (muted) {
       audio.pause();
-      return;
+    } else {
+      void audio.play().catch(() => {
+        if (cancelled || getMutedSnapshot()) return;
+        window.addEventListener("pointerdown", resume, { once: true });
+        window.addEventListener("keydown", resume, { once: true });
+      });
     }
 
-    void audio.play().catch(() => {
-      const resume = () => {
-        void audio.play();
-      };
-      window.addEventListener("pointerdown", resume, { once: true });
-      window.addEventListener("keydown", resume, { once: true });
-      return () => {
-        window.removeEventListener("pointerdown", resume);
-        window.removeEventListener("keydown", resume);
-      };
-    });
+    return () => {
+      cancelled = true;
+      window.removeEventListener("pointerdown", resume);
+      window.removeEventListener("keydown", resume);
+    };
   }, [muted]);
 
   return (
