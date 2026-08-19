@@ -11,7 +11,7 @@ import {
   TeamRoom,
   VotingBoard,
 } from "@/components/play-surfaces";
-import { Countdown, PhaseBanner } from "@/components/ui";
+import { BigButton, Countdown, Panel, PhaseBanner } from "@/components/ui";
 
 export function PlayerShell(props: { roomCode: string }) {
   const [view, setView] = useState<PlayerView | null>(null);
@@ -42,27 +42,28 @@ export function PlayerShell(props: { roomCode: string }) {
   if (error && !view) {
     return (
       <main className="mx-auto max-w-lg px-4 py-16">
-        <h1 className="mb-4 text-4xl font-bold">Join {props.roomCode}</h1>
-        <form
-          className="space-y-4"
-          onSubmit={(event) => {
-            event.preventDefault();
-            void joinRoomAction(props.roomCode, name).then((result) => {
-              if (!result.ok) setError(result.error);
-            });
-          }}
-        >
-          <input
-            className="w-full rounded-2xl border border-stone-300 px-4 py-4 text-xl"
-            placeholder="Display name"
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-          />
-          <button className="w-full rounded-2xl bg-orange-600 px-4 py-4 text-xl font-semibold text-white">
-            Join room
-          </button>
-          <p className="text-stone-500">{error}</p>
-        </form>
+        <Panel tone="blue" title={`Join ${props.roomCode}`}>
+          <form
+            className="space-y-4"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void joinRoomAction(props.roomCode, name).then((result) => {
+                if (!result.ok) setError(result.error);
+              });
+            }}
+          >
+            <input
+              className="w-full rounded-2xl border-2 border-comic-ink bg-white px-4 py-4 text-xl focus:outline-none focus:ring-2 focus:ring-comic-blue"
+              placeholder="Display name"
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+            />
+            <BigButton type="submit" tone="secondary" className="w-full">
+              Join room
+            </BigButton>
+            <p className="text-stone-500">{error}</p>
+          </form>
+        </Panel>
       </main>
     );
   }

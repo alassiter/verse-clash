@@ -6,6 +6,15 @@
   --ink: #1c1917;
   --paper: #fff7ed;
   --accent: #ea580c;
+
+  /* Comic design system, sampled from the brand mockup */
+  --comic-ink: #000000;
+  --comic-wood: #ecd6b8;
+  --comic-cream: #faefe6;
+  --comic-red: #da100d;
+  --comic-blue: #0955ac;
+  --comic-green: #009b1d;
+  --comic-yellow: #ffde50;
 }
 
 @theme inline {
@@ -13,10 +22,90 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --font-comic: var(--font-comic);
+  --font-script: var(--font-script);
+
+  --color-comic-ink: var(--comic-ink);
+  --color-comic-wood: var(--comic-wood);
+  --color-comic-cream: var(--comic-cream);
+  --color-comic-red: var(--comic-red);
+  --color-comic-blue: var(--comic-blue);
+  --color-comic-green: var(--comic-green);
+  --color-comic-yellow: var(--comic-yellow);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+}
+
+.bg-wood {
+  background-color: var(--comic-wood);
+  background-image: url("/backgrounds/wood-bg.jpg");
+  background-repeat: repeat;
+  background-size: 480px auto;
+}
+
+.comic-panel {
+  border: 4px solid var(--comic-ink);
+  box-shadow: 6px 6px 0 0 var(--comic-ink);
+}
+
+.comic-press {
+  transition: transform 0.08s ease, box-shadow 0.08s ease;
+}
+
+.comic-press:active {
+  transform: translate(3px, 3px);
+  box-shadow: 2px 2px 0 0 var(--comic-ink) !important;
+}
+
+@keyframes logo-wobble {
+  0% {
+    transform: scale(1) rotate(0deg);
+  }
+  20% {
+    transform: scale(1.15) rotate(0deg);
+  }
+  35% {
+    transform: scale(1.15) rotate(-6deg);
+  }
+  50% {
+    transform: scale(1.15) rotate(6deg);
+  }
+  65% {
+    transform: scale(1.15) rotate(-4deg);
+  }
+  80% {
+    transform: scale(1.1) rotate(2deg);
+  }
+  100% {
+    transform: scale(1) rotate(0deg);
+  }
+}
+
+.logo-wobble {
+  animation: logo-wobble 1.2s cubic-bezier(0.36, 0.07, 0.19, 0.97);
+  transform-origin: 50% 50%;
+}
+
+@keyframes logo-nudge {
+  0% {
+    transform: scale(1) rotate(0deg);
+  }
+  30% {
+    transform: scale(1.03) rotate(-1.5deg);
+  }
+  60% {
+    transform: scale(1.03) rotate(1.5deg);
+  }
+  100% {
+    transform: scale(1) rotate(0deg);
+  }
+}
+
+.logo-nudge {
+  animation: logo-nudge 0.5s ease-in-out;
+  transform-origin: 50% 50%;
 }

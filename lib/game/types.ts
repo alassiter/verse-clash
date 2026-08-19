@@ -101,36 +101,36 @@ export type RoomCommands = {
   createRoom: (
     actor: Actor,
     input: { displayName: string },
-  ) => { roomCode: string; url: string };
-  joinRoom: (actor: Actor, input: { code: string; displayName: string }) => void;
-  getPlayerView: (actor: Actor, roomCode: string) => PlayerView;
-  getHostView: (actor: Actor, roomCode: string) => HostView;
-  heartbeat: (actor: Actor, roomCode: string) => void;
-  setReady: (actor: Actor, roomCode: string, ready: boolean) => void;
-  shuffleTeams: (actor: Actor, roomCode: string) => void;
+  ) => Promise<{ roomCode: string; url: string }>;
+  joinRoom: (actor: Actor, input: { code: string; displayName: string }) => Promise<void>;
+  getPlayerView: (actor: Actor, roomCode: string) => Promise<PlayerView>;
+  getHostView: (actor: Actor, roomCode: string) => Promise<HostView>;
+  heartbeat: (actor: Actor, roomCode: string) => Promise<void>;
+  setReady: (actor: Actor, roomCode: string, ready: boolean) => Promise<void>;
+  shuffleTeams: (actor: Actor, roomCode: string) => Promise<void>;
   movePlayer: (
     actor: Actor,
     roomCode: string,
     playerId: string,
     teamId: string | null,
-  ) => void;
-  startRound: (actor: Actor, roomCode: string) => void;
-  submitChoice: (actor: Actor, roomCode: string, optionId: string) => void;
-  sendTeamMessage: (actor: Actor, roomCode: string, body: string) => void;
-  sendTeamEmoji: (actor: Actor, roomCode: string, emoji: string) => void;
-  pause: (actor: Actor, roomCode: string) => void;
-  resume: (actor: Actor, roomCode: string) => void;
-  endRound: (actor: Actor, roomCode: string) => void;
+  ) => Promise<void>;
+  startRound: (actor: Actor, roomCode: string) => Promise<void>;
+  submitChoice: (actor: Actor, roomCode: string, optionId: string) => Promise<void>;
+  sendTeamMessage: (actor: Actor, roomCode: string, body: string) => Promise<void>;
+  sendTeamEmoji: (actor: Actor, roomCode: string, emoji: string) => Promise<void>;
+  pause: (actor: Actor, roomCode: string) => Promise<void>;
+  resume: (actor: Actor, roomCode: string) => Promise<void>;
+  endRound: (actor: Actor, roomCode: string) => Promise<void>;
   sendRevealReaction: (
     actor: Actor,
     roomCode: string,
     emoji: string,
-    segmentIndex: number,
-  ) => void;
-  vote: (actor: Actor, roomCode: string, teamId: string) => void;
-  startNextRound: (actor: Actor, roomCode: string) => void;
-  endGame: (actor: Actor, roomCode: string) => void;
-  restartGame: (actor: Actor, roomCode: string) => void;
+    segmentIndex?: number,
+  ) => Promise<void>;
+  vote: (actor: Actor, roomCode: string, teamId: string) => Promise<void>;
+  startNextRound: (actor: Actor, roomCode: string) => Promise<void>;
+  endGame: (actor: Actor, roomCode: string) => Promise<void>;
+  restartGame: (actor: Actor, roomCode: string) => Promise<void>;
 };
 
 export type Clock = { now: () => number };
@@ -140,5 +140,5 @@ export type RoomCommandDeps = {
   clock: Clock;
   random: () => number;
   roomUrl: (code: string) => string;
-  rooms?: Map<string, import("@/lib/game/state").RoomState>;
+  store: import("@/lib/game/room-store").RoomStore;
 };
