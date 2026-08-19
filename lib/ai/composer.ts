@@ -2,7 +2,7 @@ import { z } from "zod";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { getAnthropicClient } from "@/lib/ai/client";
 import { verifyComposition } from "@/lib/ai/verify";
-import { assembleComposition } from "@/lib/content";
+import { cyclingFallback } from "@/lib/content";
 import type { AssembledSegment, CompositionFill, ContentPack } from "@/lib/content";
 import type {
   AiComposer,
@@ -14,13 +14,6 @@ import type {
 const COMPOSER_MODEL = process.env.AI_COMPOSER_MODEL ?? "claude-opus-5";
 const JUDGE_MODEL = process.env.AI_JUDGE_MODEL ?? "claude-opus-5";
 const CALL_TIMEOUT_MS = 8_000;
-const MAX_COMPOSE_RETRIES = 1;
-// The doc's stated 60-70% floor counts against the illustrative example's own
-// natural-language padding ("have", "done", "band", "even"...) that isn't
-// pure grammatical glue but also isn't player content — a strict 0.6 gate
-// rejected real, well-formed model output in testing. 0.45 still catches
-// verses that are mostly invented content with player words sprinkled in.
-const RATIO_FLOOR = 0.45;
 
 const WordUsageSchema = z.object({
   slotId: z.string(),
@@ -45,14 +38,15 @@ const JudgeResponseSchema = z.object({
   ),
 });
 
-const COMPOSER_SYSTEM_PROMPT = [
-  "You are the assembly engine for a party word game. Every player on a team submits exactly one word; your only job is to arrange those submitted words into a short, readable verse answering the prompt. You are not the author — the players are.",
+export const COMPOSER_SYSTEM_PROMPT = [
+  "You are a co-author with a party-game team. They submitted words; you write a verse that uses those words to answer the prompt.",
   "",
   "Rules, none negotiable:",
   "- Every submitted word must appear in your output exactly once, in a form derivable from the original word (you may conjugate, pluralize, or adjust tense/case, but never substitute a synonym or unrelated word).",
-  "- Never drop a submitted word, even if it seems off-topic or awkward for the prompt — make it work.",
-  "- You may add ordinary connective/glue words (articles, prepositions, conjunctions, simple verbs) and punctuation sparingly, but at least 60% of the meaningful words in your output must be the players' own submitted words.",
-  "- Do not invent unrelated new content, characters, or plot beyond arranging the given words.",
+  "- Never drop a submitted word, even if it seems off-topic or awkward for the prompt — make it work. That's what makes it funny!",
+  "- Aim for about 60% of the meaningful words in your output to be the players' submitted words. This is an aim, not a hard cap.",
+  "- Aim for two to four sentences and about 25–40 words. Never write a comma-separated list of the submitted words.",
+  "- You may add ordinary connective/glue words (articles, prepositions, conjunctions, simple verbs) and punctuation.",
   "- For every submitted word, report exactly how you rendered it in `wordUsage`, echoing back the same slotId and playerId you were given, plus the original text and the exact substring you used in the verse.",
 ].join("\n");
 
@@ -60,7 +54,7 @@ function segmentsToText(segments: AssembledSegment[]): string {
   return segments.map((segment) => segment.text).join(" ");
 }
 
-function buildComposePrompt(
+export function buildComposePrompt(
   pack: ContentPack,
   input: ComposeJudgeInput,
   team: { teamId: string; fills: CompositionFill[] },
@@ -69,19 +63,9 @@ function buildComposePrompt(
   const wordList = team.fills
     .map((fill) => `- slotId="${fill.slotId}" playerId="${fill.playerId}" (${fill.displayName}): "${fill.text}"`)
     .join("\n");
-  const playerCount = team.fills.length;
-  const lengthHint =
-    playerCount <= 5
-      ? "one sentence"
-      : playerCount <= 10
-        ? "two sentences"
-        : playerCount <= 16
-          ? "three sentences or lines"
-          : "four to five short lines";
   return [
     `Prompt: ${prompt?.text ?? input.promptId}`,
     prompt?.formatHint ? `Format: ${prompt.formatHint}` : null,
-    `Team size: ${playerCount} player(s). Target length: ${lengthHint}.`,
     `Submitted words (every one must appear, exactly once each):`,
     wordList,
   ]
@@ -130,14 +114,14 @@ function toSegments(
   return segments;
 }
 
-function deterministicFallback(
+function flavorFallback(
   pack: ContentPack,
-  templateId: string,
   team: { teamId: string; fills: CompositionFill[] },
+  random: () => number,
 ): { teamId: string; segments: AssembledSegment[]; source: "deterministic_fallback" } {
   return {
     teamId: team.teamId,
-    segments: assembleComposition(pack, { templateId, fills: team.fills }).segments,
+    segments: cyclingFallback(pack, team.fills, random),
     source: "deterministic_fallback",
   };
 }
@@ -147,53 +131,38 @@ async function composeTeam(
   pack: ContentPack,
   input: ComposeJudgeInput,
   team: { teamId: string; fills: CompositionFill[] },
+  random: () => number,
 ): Promise<{
   teamId: string;
   segments: AssembledSegment[];
   source: "ai" | "deterministic_fallback";
 }> {
-  const attempt = async (correction?: string) => {
-    const userContent = correction
-      ? `${buildComposePrompt(pack, input, team)}\n\nYour previous attempt was rejected: ${correction}`
-      : buildComposePrompt(pack, input, team);
+  try {
     const response = await client.messages.parse(
       {
         model: COMPOSER_MODEL,
         max_tokens: 1024,
         output_config: { effort: "low", format: zodOutputFormat(ComposeResponseSchema) },
         system: COMPOSER_SYSTEM_PROMPT,
-        messages: [{ role: "user", content: userContent }],
+        messages: [{ role: "user", content: buildComposePrompt(pack, input, team) }],
       },
       { timeout: CALL_TIMEOUT_MS },
     );
-    return response.parsed_output;
-  };
-
-  let parsed: z.infer<typeof ComposeResponseSchema> | null = null;
-  let lastReason = "no response";
-  for (let i = 0; i <= MAX_COMPOSE_RETRIES; i += 1) {
-    let candidate: z.infer<typeof ComposeResponseSchema> | null;
-    try {
-      candidate = await attempt(i === 0 ? undefined : lastReason);
-    } catch (err) {
-      lastReason = err instanceof Error ? err.message : "request failed";
-      continue;
+    const candidate = response.parsed_output;
+    if (!candidate) {
+      return flavorFallback(pack, team, random);
     }
-    if (!candidate) continue;
     const verseText = candidate.verseLines.join(" ");
-    const result = verifyComposition(team.fills, candidate.wordUsage, verseText, RATIO_FLOOR);
+    const result = verifyComposition(team.fills, candidate.wordUsage, verseText);
     if (result.ok) {
-      parsed = candidate;
-      break;
+      return { teamId: team.teamId, segments: toSegments(candidate, team.fills), source: "ai" };
     }
-    lastReason = result.reason;
+  } catch (err) {
+    console.warn(
+      `[ai-composer] team ${team.teamId} compose failed: ${err instanceof Error ? err.message : String(err)}`,
+    );
   }
-
-  if (parsed) {
-    return { teamId: team.teamId, segments: toSegments(parsed, team.fills), source: "ai" };
-  }
-  console.warn(`[ai-composer] team ${team.teamId} fell back to deterministic: ${lastReason}`);
-  return deterministicFallback(pack, input.templateId, team);
+  return flavorFallback(pack, team, random);
 }
 
 async function judgeVerses(
@@ -234,13 +203,16 @@ async function judgeVerses(
   }
 }
 
-export function createAnthropicComposer(pack: ContentPack): AiComposer {
+export function createAnthropicComposer(
+  pack: ContentPack,
+  random: () => number = Math.random,
+): AiComposer {
   return {
     async composeAndJudge(input: ComposeJudgeInput): Promise<ComposeJudgeResult> {
       const client = getAnthropicClient();
       const compositions = client
-        ? await Promise.all(input.teams.map((team) => composeTeam(client, pack, input, team)))
-        : input.teams.map((team) => deterministicFallback(pack, input.templateId, team));
+        ? await Promise.all(input.teams.map((team) => composeTeam(client, pack, input, team, random)))
+        : input.teams.map((team) => flavorFallback(pack, team, random));
       const judging = client
         ? await judgeVerses(client, pack, input, compositions)
         : undefined;

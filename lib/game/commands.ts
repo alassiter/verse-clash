@@ -1,6 +1,7 @@
-import { assembleComposition } from "@/lib/content";
+import { cyclingFallback } from "@/lib/content";
 import {
   current,
+  dealNextHandForPlayer,
   enter,
   leave,
   pickNextPrompt,
@@ -27,15 +28,13 @@ import { hostView, playerView } from "@/lib/game/views";
 
 function defaultComposeAndJudge(
   pack: RoomCommandDeps["pack"],
+  random: () => number,
 ): AiComposer["composeAndJudge"] {
   return async (input: ComposeJudgeInput): Promise<ComposeJudgeResult> => ({
     requestId: input.requestId,
     compositions: input.teams.map((team) => ({
       teamId: team.teamId,
-      segments: assembleComposition(pack, {
-        templateId: input.templateId,
-        fills: team.fills,
-      }).segments,
+      segments: cyclingFallback(pack, team.fills, random),
       source: "deterministic_fallback" as const,
     })),
   });
@@ -91,7 +90,7 @@ export function createRoomCommands(deps: RoomCommandDeps): RoomCommands {
   const rooms = new Map<string, RoomState>();
   const roomVersions = new Map<string, number>();
 
-  const composeAndJudge = deps.ai?.composeAndJudge ?? defaultComposeAndJudge(pack);
+  const composeAndJudge = deps.ai?.composeAndJudge ?? defaultComposeAndJudge(pack, deps.random);
   const ai: AiHooks = {
     composeAndJudge,
     getRoom: (roomId: string) => rooms.get(roomId),
@@ -303,6 +302,7 @@ export function createRoomCommands(deps: RoomCommandDeps): RoomCommands {
         assignment.selectedOptionId = optionId;
         assignment.submittedAt = now();
         touch(player, now());
+        dealNextHandForPlayer(pack, room, round, player.id, deps.random);
         if (
           round.assignments.length > 0 &&
           round.assignments.every((entry) => entry.submittedAt)

@@ -64,8 +64,8 @@ describe("create room and join by code", () => {
     const again = await commands.getPlayerView(priya, created.roomCode);
     expect(again.phase).toBe("selecting");
     expect(again.displayName).toBe("Priya");
-    expect(again.selection?.submitted).toBe(true);
-    expect(again.selection?.selectedOptionId).toBe(optionId);
+    expect(again.selection?.submitted).toBe(false);
+    expect(again.selection?.options).toHaveLength(5);
   });
 
   it("does not move the game when someone only looks after time has passed", async () => {

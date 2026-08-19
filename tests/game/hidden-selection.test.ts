@@ -69,7 +69,7 @@ describe("hidden selection in a team room", () => {
     ).toBeUndefined();
   });
 
-  it("accepts one submit, keeps it on refresh, and hides the word from teammates", async () => {
+  it("accepts a submit, deals the next hand, and hides the word from teammates", async () => {
     const { commands, advanceTime } = createGame();
     const roomCode = await openLobby(commands);
     await seatPriyaAndSamTogether(commands, roomCode);
@@ -79,12 +79,12 @@ describe("hidden selection in a team room", () => {
     await commands.submitChoice(priya, roomCode, optionId);
 
     const priyaView = await commands.getPlayerView(priya, roomCode);
-    expect(priyaView.selection?.submitted).toBe(true);
-    expect(priyaView.selection?.selectedOptionId).toBe(optionId);
+    expect(priyaView.selection?.submitted).toBe(false);
+    expect(priyaView.selection?.options).toHaveLength(5);
 
     const samView = await commands.getPlayerView(sam, roomCode);
     expect(samView.teammates.find((mate) => mate.id === priya.id)?.submitted).toBe(
-      true,
+      false,
     );
     expect(
       samView.teammates.find((mate) => mate.id === priya.id)?.selectedText,

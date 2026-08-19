@@ -47,8 +47,20 @@ The Classic-only Phase in the Lobby when everyone reads the same authored prompt
 _Avoid_: prompt reveal, prompt_reveal
 
 **Selecting**:
-The Phase when seated players fill their blanks.
+The Phase when seated players fill their Slots.
 _Avoid_: choosing, team room
+
+**Slot**:
+A labeled blank filled during Selecting. Each Slot has a word type (description, thing, something important, or action).
+_Avoid_: blank, category, hole
+
+**Fill**:
+A word a seated player submits for one Slot during Selecting.
+_Avoid_: pick, choice, submission, word request
+
+**Verse**:
+The Classic piece shown at Reveal, written from a Team's Fills.
+_Avoid_: composition, story (that's Mad Libs / Grand)
 
 **Reveal**:
 The Phase in the Lobby when the filled story is shown.

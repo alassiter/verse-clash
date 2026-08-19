@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { createGame, host, playThroughSelection, priya, sam } from "./harness";
 
 describe("reveal compositions", () => {
-  it("assembles attributed compositions, fills unused slots, and opens a shared reveal", async () => {
+  it("assembles attributed compositions and opens a shared reveal", async () => {
     const { commands, advanceTime } = createGame();
     const roomCode = await playThroughSelection(commands, advanceTime);
     const view = await commands.getPlayerView(priya, roomCode);
@@ -12,14 +12,6 @@ describe("reveal compositions", () => {
     expect(
       view.reveal?.composition.some(
         (segment) => segment.type === "contribution" && segment.displayName === "Priya",
-      ),
-    ).toBe(true);
-    expect(
-      view.reveal?.composition.some(
-        (segment) =>
-          segment.type === "contribution" &&
-          segment.displayName === "House" &&
-          segment.text === "continue",
       ),
     ).toBe(true);
   });
