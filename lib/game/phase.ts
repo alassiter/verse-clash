@@ -41,6 +41,7 @@ export const PHASE_DURATIONS = {
 export type AiHooks = {
   composeAndJudge(input: ComposeJudgeInput): Promise<ComposeJudgeResult>;
   getRoom(roomId: string): RoomState | undefined;
+  persistRoom(roomId: string): Promise<void>;
   now(): number;
 };
 
@@ -383,14 +384,16 @@ function beginComposing(room: RoomState, round: RoundState, ctx: PhaseContext) {
 
   ai
     .composeAndJudge({ roomId, roundId, requestId, templateId, promptId, teams: teamsFills })
-    .then((result) => {
+    .then(async (result) => {
       applyComposition(ai, pack, roomId, roundId, requestId, teamsFills, result);
+      await ai.persistRoom(roomId);
     })
-    .catch(() => {
+    .catch(async () => {
       applyComposition(ai, pack, roomId, roundId, requestId, teamsFills, {
         requestId,
         compositions: deterministicCompositions(pack, templateId, teamsFills),
       });
+      await ai.persistRoom(roomId);
     });
 }
 

@@ -106,6 +106,14 @@ export function playerView(
       ? { id: team.id, name: team.name, teammates: mateViews }
       : null,
     teammates: mateViews,
+    teamChat: player.teamId
+      ? room.teamMessages
+          .filter((message) => message.teamId === player.teamId)
+          .map((message) => ({
+            playerName: room.players.find((entry) => entry.id === message.playerId)?.displayName ?? "",
+            body: message.body,
+          }))
+      : [],
     waitingForNextRound: waitingForNextRound || undefined,
     soloAutoFill:
       team && round

@@ -89,11 +89,25 @@ export function createRoomCommands(deps: RoomCommandDeps): RoomCommands {
   const now = () => deps.clock.now();
   let codeSerial = 0;
   const rooms = new Map<string, RoomState>();
+  const roomVersions = new Map<string, number>();
 
   const composeAndJudge = deps.ai?.composeAndJudge ?? defaultComposeAndJudge(pack);
   const ai: AiHooks = {
     composeAndJudge,
     getRoom: (roomId: string) => rooms.get(roomId),
+    persistRoom: async (roomId: string) => {
+      const room = rooms.get(roomId);
+      const version = roomVersions.get(roomId);
+      if (!room || version === undefined) return;
+      if (await store.save(room.code, room, version)) {
+        roomVersions.set(roomId, version + 1);
+        return;
+      }
+      const latest = await store.load(room.code);
+      if (latest && (await store.save(room.code, room, latest.version))) {
+        roomVersions.set(roomId, latest.version + 1);
+      }
+    },
     now,
   };
 
@@ -116,7 +130,9 @@ export function createRoomCommands(deps: RoomCommandDeps): RoomCommands {
       }
       const result = mutate(found.state);
       rooms.set(code, found.state);
+      roomVersions.set(code, found.version);
       if (await store.save(code, found.state, found.version)) {
+        roomVersions.set(code, found.version + 1);
         return result;
       }
     }
@@ -131,7 +147,6 @@ export function createRoomCommands(deps: RoomCommandDeps): RoomCommands {
     if (!found) {
       throw new RoomError("not_found", "No room uses that code.");
     }
-    rooms.set(roomCode.toUpperCase(), found.state);
     return read(found.state);
   }
 
@@ -167,6 +182,7 @@ export function createRoomCommands(deps: RoomCommandDeps): RoomCommands {
         };
         if (await store.insert(room)) {
           rooms.set(code, room);
+          roomVersions.set(code, 0);
           return { roomCode: code, url: deps.roomUrl(code) };
         }
       }
@@ -275,13 +291,11 @@ export function createRoomCommands(deps: RoomCommandDeps): RoomCommands {
           throw new RoomError("wrong_phase", "Selection is not open.");
         }
         const assignment = round.assignments.find(
-          (entry) => entry.playerId === player.id,
+          (entry) => entry.playerId === player.id && !entry.submittedAt,
         );
         if (!assignment) {
+          if (round.assignments.some((entry) => entry.playerId === player.id)) return;
           throw new RoomError("no_assignment", "Wait for the next round.");
-        }
-        if (assignment.submittedAt) {
-          return;
         }
         if (!assignment.options.some((option) => option.id === optionId)) {
           throw new RoomError("bad_option", "That option was not dealt to you.");

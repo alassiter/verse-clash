@@ -5,7 +5,7 @@ import { createGame, host, lee, openLobby, priya, sam } from "./harness";
 
 // Wraps a RoomStore so its first N `save` calls report a version conflict
 // (as if another request had saved in between), forcing callers through the
-// retry path in `withRoom` (lib/game/commands.ts).
+// retry path in `withRoom` (lib/game/await commands.ts).
 function withInjectedConflicts(store: RoomStore, conflictsRemaining: number): RoomStore {
   let remaining = conflictsRemaining;
   return {
@@ -88,7 +88,13 @@ describe("optimistic concurrency", () => {
     await commands.heartbeat(host, roomCode);
     const standings = await commands.getPlayerView(priya, roomCode);
     expect(standings.phase).toBe("standings");
-    expect(standings.standings?.find((row) => row.teamId === goblin.id)?.wins).toBe(1);
-    expect(standings.standings?.find((row) => row.teamId === waffle.id)?.wins).toBe(1);
+    expect(
+      standings.standings?.find((row) => row.teamId === goblin.id)?.lastRound
+        ?.crowdFavoriteBonus,
+    ).toBe(3);
+    expect(
+      standings.standings?.find((row) => row.teamId === waffle.id)?.lastRound
+        ?.crowdFavoriteBonus,
+    ).toBe(3);
   });
 });

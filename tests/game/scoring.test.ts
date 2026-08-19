@@ -4,42 +4,42 @@ import { createGame, flushAsync, host, lee, priya, sam } from "./harness";
 describe("hybrid scoring across multiple teams", () => {
   it("computes word points and placement per team and rolls up into cumulative totals", async () => {
     const { commands, advanceTime } = createGame();
-    const created = commands.createRoom(host, { displayName: "Alex" });
+    const created = await commands.createRoom(host, { displayName: "Alex" });
     const roomCode = created.roomCode;
-    commands.joinRoom(priya, { code: roomCode, displayName: "Priya" });
-    commands.joinRoom(sam, { code: roomCode, displayName: "Sam" });
-    commands.joinRoom(lee, { code: roomCode, displayName: "Lee" });
+    await commands.joinRoom(priya, { code: roomCode, displayName: "Priya" });
+    await commands.joinRoom(sam, { code: roomCode, displayName: "Sam" });
+    await commands.joinRoom(lee, { code: roomCode, displayName: "Lee" });
 
-    const teams = commands.getHostView(host, roomCode).teams;
+    const teams = (await commands.getHostView(host, roomCode)).teams;
     const goblin = teams.find((team) => team.id === "goblin")!;
     const waffle = teams.find((team) => team.id === "waffle")!;
-    commands.movePlayer(host, roomCode, priya.id, goblin.id);
-    commands.movePlayer(host, roomCode, sam.id, waffle.id);
-    commands.movePlayer(host, roomCode, lee.id, waffle.id);
+    await commands.movePlayer(host, roomCode, priya.id, goblin.id);
+    await commands.movePlayer(host, roomCode, sam.id, waffle.id);
+    await commands.movePlayer(host, roomCode, lee.id, waffle.id);
 
-    commands.startRound(host, roomCode);
+    await commands.startRound(host, roomCode);
     advanceTime(12_001);
-    commands.heartbeat(host, roomCode);
+    await commands.heartbeat(host, roomCode);
 
     for (const actor of [priya, sam, lee]) {
-      const optionId = commands.getPlayerView(actor, roomCode).selection!.options[0].id;
-      commands.submitChoice(actor, roomCode, optionId);
+      const optionId = (await commands.getPlayerView(actor, roomCode)).selection!.options[0].id;
+      await commands.submitChoice(actor, roomCode, optionId);
     }
     await flushAsync();
-    expect(commands.getPlayerView(priya, roomCode).phase).toBe("reveal");
+    expect((await commands.getPlayerView(priya, roomCode)).phase).toBe("reveal");
 
     for (let i = 0; i < 40; i += 1) {
-      if (commands.getPlayerView(priya, roomCode).phase === "voting") break;
+      if ((await commands.getPlayerView(priya, roomCode)).phase === "voting") break;
       advanceTime(4_001);
-      commands.heartbeat(host, roomCode);
+      await commands.heartbeat(host, roomCode);
     }
-    expect(commands.getPlayerView(priya, roomCode).phase).toBe("voting");
+    expect((await commands.getPlayerView(priya, roomCode)).phase).toBe("voting");
 
-    commands.vote(priya, roomCode, goblin.id);
+    await commands.vote(priya, roomCode, goblin.id);
     advanceTime(30_001);
-    commands.heartbeat(host, roomCode);
+    await commands.heartbeat(host, roomCode);
 
-    const standings = commands.getPlayerView(priya, roomCode).standings!;
+    const standings = (await commands.getPlayerView(priya, roomCode)).standings!;
     expect(standings).toHaveLength(4);
     const goblinRow = standings.find((row) => row.teamId === goblin.id)!;
     const waffleRow = standings.find((row) => row.teamId === waffle.id)!;

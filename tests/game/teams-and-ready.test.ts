@@ -25,7 +25,7 @@ describe("seat teams and ready up", () => {
       "Jo:Green",
     ]);
     expect((await commands.getPlayerView(priya, created.roomCode)).team?.name).toBe(
-      "Stapler",
+      "Yellow",
     );
   });
 
@@ -45,11 +45,11 @@ describe("seat teams and ready up", () => {
     expect(afterShuffle.find((player) => player.isHost)?.teamName).toBeNull();
 
     const waffle = (await commands.getHostView(host, roomCode)).teams.find(
-      (team) => team.name === "Waffle",
+      (team) => team.name === "Blue",
     );
-    if (!waffle) throw new Error("missing Waffle");
+    if (!waffle) throw new Error("missing Blue team");
     await commands.movePlayer(host, roomCode, priya.id, waffle.id);
-    expect((await commands.getPlayerView(priya, roomCode)).team?.name).toBe("Waffle");
+    expect((await commands.getPlayerView(priya, roomCode)).team?.name).toBe("Blue");
 
     await expect(commands.movePlayer(host, roomCode, host.id, waffle.id)).rejects.toThrow(
       RoomError,

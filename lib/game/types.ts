@@ -79,6 +79,7 @@ export type PlayerView = {
   timerEndsAt?: number;
   team: { id: string; name: string; teammates: TeammateView[] } | null;
   teammates: TeammateView[];
+  teamChat: ChatMessageView[];
   waitingForNextRound?: boolean;
   lobby?: {
     players: Array<{

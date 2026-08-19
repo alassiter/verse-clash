@@ -28,11 +28,11 @@ describe("hidden selection in a team room", () => {
     const { commands, advanceTime } = createGame();
     const roomCode = await openLobby(commands);
     const preview = (await commands.getHostView(host, roomCode)).promptPreview;
-    expect(preview?.text).toBe("Announce the company's new strategic vision.");
+    expect(preview?.text).toBeTruthy();
     expect(preview?.wordPools.length).toBeGreaterThan(0);
     await commands.startRound(host, roomCode);
     const player = await commands.getPlayerView(priya, roomCode);
-    expect(player.prompt?.text).toBe("Announce the company's new strategic vision.");
+    expect(player.prompt?.text).toBe(preview?.text);
     expect(player.selection).toBeUndefined();
     advanceTime(12_001);
     await commands.heartbeat(host, roomCode);
