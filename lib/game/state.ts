@@ -55,6 +55,9 @@ export type RoundState = {
   id: string;
   number: number;
   type: "straight" | "chaos";
+  /** True once regulation rounds have ended in a tie and this round was
+   * added to break it — see MAX_ROUNDS / leadingTeams in lib/game/phase.ts. */
+  isTiebreaker: boolean;
   chaosCard: ChaosCardId | null;
   promptId: string;
   templateId: string;
@@ -98,4 +101,12 @@ export type RoomState = {
 
 export function currentRound(room: RoomState): RoundState | undefined {
   return room.rounds.at(-1);
+}
+
+/** The team(s) with the highest cumulative score. More than one entry means
+ * those teams are tied for the lead. */
+export function leadingTeams(room: RoomState): TeamState[] {
+  if (room.teams.length === 0) return [];
+  const topScore = Math.max(...room.teams.map((team) => team.totalScore));
+  return room.teams.filter((team) => team.totalScore === topScore);
 }

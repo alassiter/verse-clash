@@ -250,6 +250,11 @@ export function StandingsBoard(props: { view: PlayerView }) {
   const rows = [...(props.view.standings ?? [])].sort((a, b) => b.totalScore - a.totalScore);
   return (
     <Panel tone="red" title="Standings">
+      {props.view.isTiebreaker ? (
+        <p className="mb-4 text-center text-lg font-bold text-red-700">
+          It&rsquo;s a tie! Sudden-death round &mdash; next team to lead wins.
+        </p>
+      ) : null}
       <ul className="space-y-6">
         {rows.map((row) => (
           <li key={row.teamId}>

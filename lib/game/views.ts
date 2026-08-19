@@ -6,6 +6,7 @@ import {
   AUTO_FILL_PLAYER_PREFIX,
   currentRound,
   DISCONNECT_AFTER_MS,
+  leadingTeams,
   type PlayerState,
   type RoomState,
 } from "@/lib/game/state";
@@ -197,6 +198,7 @@ export function playerView(
   }
 
   if (view.phase === "standings" || view.phase === "ended") {
+    view.isTiebreaker = round?.isTiebreaker ?? false;
     view.standings = room.teams.map((entry) => ({
       teamId: entry.id,
       teamName: entry.name,
@@ -248,12 +250,9 @@ function findBestVerse(
 }
 
 function findWinner(room: RoomState): PlayerView["winner"] {
-  if (room.teams.length === 0) return undefined;
-  const topScore = Math.max(...room.teams.map((team) => team.totalScore));
-  const teamNames = room.teams
-    .filter((team) => team.totalScore === topScore)
-    .map((team) => team.name);
-  return { teamNames, totalScore: topScore };
+  const teams = leadingTeams(room);
+  if (teams.length === 0) return undefined;
+  return { teamNames: teams.map((team) => team.name), totalScore: teams[0].totalScore };
 }
 
 export function hostView(

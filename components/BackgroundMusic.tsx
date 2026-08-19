@@ -1,35 +1,13 @@
 "use client";
 
 import { useEffect, useRef, useSyncExternalStore } from "react";
+import { getMutedServerSnapshot, getMutedSnapshot, setMuted, subscribeMuted } from "@/lib/sound-mute";
 
 const VOLUME = 0.15;
-const MUTE_STORAGE_KEY = "verse-clash-music-muted";
-
-let listeners: Array<() => void> = [];
-
-function subscribe(listener: () => void) {
-  listeners.push(listener);
-  return () => {
-    listeners = listeners.filter((l) => l !== listener);
-  };
-}
-
-function getSnapshot() {
-  return window.localStorage.getItem(MUTE_STORAGE_KEY) === "true";
-}
-
-function getServerSnapshot() {
-  return true;
-}
-
-function setMuted(next: boolean) {
-  window.localStorage.setItem(MUTE_STORAGE_KEY, String(next));
-  listeners.forEach((listener) => listener());
-}
 
 export function BackgroundMusic() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const muted = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+  const muted = useSyncExternalStore(subscribeMuted, getMutedSnapshot, getMutedServerSnapshot);
 
   useEffect(() => {
     const audio = audioRef.current;

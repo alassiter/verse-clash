@@ -109,6 +109,9 @@ export type PlayerView = {
     attribution?: string;
   };
   voting?: { teams: { id: string; name: string }[] };
+  /** True once regulation rounds ended in a tie and the game moved into
+   * sudden-death rounds to break it. */
+  isTiebreaker?: boolean;
   standings?: Array<{
     teamId: string;
     teamName: string;

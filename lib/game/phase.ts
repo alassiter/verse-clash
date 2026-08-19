@@ -13,6 +13,7 @@ import {
   AUTO_FILL_DISPLAY_NAME,
   AUTO_FILL_PLAYER_PREFIX,
   currentRound,
+  leadingTeams,
   TEAM_SEEDS,
   type AssignmentState,
   type RoomState,
@@ -130,9 +131,11 @@ export function enter(
   cancelPendingComposition(round);
   finalizeRoundScoring(room, round);
   round.phaseEndsAt = null;
-  if (round.number >= MAX_ROUNDS) {
+  if (round.number >= MAX_ROUNDS && leadingTeams(room).length <= 1) {
     // The game is a fixed-length match — the final round's standings are the
-    // game's final results, so there's no "next round" to offer.
+    // game's final results, so there's no "next round" to offer. If the top
+    // teams are still tied, though, we keep playing sudden-death rounds below
+    // instead of ending on a tie.
     round.phase = "ended";
     room.status = "ended";
     return;
@@ -245,6 +248,7 @@ function beginPrompt(room: RoomState, ctx: PhaseContext) {
     id: `round-${number}`,
     number,
     type: chaosCard ? "chaos" : "straight",
+    isTiebreaker: number > MAX_ROUNDS,
     chaosCard,
     promptId: prompt.id,
     templateId,
