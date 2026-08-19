@@ -1,4 +1,13 @@
-import { current, enter, leave, tick, type PhaseContext } from "@/lib/game/phase";
+import { assembleComposition } from "@/lib/content";
+import {
+  current,
+  enter,
+  leave,
+  pickNextPrompt,
+  tick,
+  type AiHooks,
+  type PhaseContext,
+} from "@/lib/game/phase";
 import {
   currentRound,
   REVEAL_EMOJIS,
@@ -6,8 +15,31 @@ import {
   type PlayerState,
   type RoomState,
 } from "@/lib/game/state";
-import type { Actor, RoomCommandDeps, RoomCommands } from "@/lib/game/types";
+import type {
+  Actor,
+  AiComposer,
+  ComposeJudgeInput,
+  ComposeJudgeResult,
+  RoomCommandDeps,
+  RoomCommands,
+} from "@/lib/game/types";
 import { hostView, playerView } from "@/lib/game/views";
+
+function defaultComposeAndJudge(
+  pack: RoomCommandDeps["pack"],
+): AiComposer["composeAndJudge"] {
+  return async (input: ComposeJudgeInput): Promise<ComposeJudgeResult> => ({
+    requestId: input.requestId,
+    compositions: input.teams.map((team) => ({
+      teamId: team.teamId,
+      segments: assembleComposition(pack, {
+        templateId: input.templateId,
+        fills: team.fills,
+      }).segments,
+      source: "deterministic_fallback" as const,
+    })),
+  });
+}
 
 export class RoomError extends Error {
   constructor(
@@ -56,11 +88,20 @@ export function createRoomCommands(deps: RoomCommandDeps): RoomCommands {
   const pack = deps.pack;
   const now = () => deps.clock.now();
   let codeSerial = 0;
+  const rooms = new Map<string, RoomState>();
+
+  const composeAndJudge = deps.ai?.composeAndJudge ?? defaultComposeAndJudge(pack);
+  const ai: AiHooks = {
+    composeAndJudge,
+    getRoom: (roomId: string) => rooms.get(roomId),
+    now,
+  };
 
   const ctxFor = (at: number): PhaseContext => ({
     pack,
     random: deps.random,
     now: at,
+    ai,
   });
 
   // Loads the room, runs `mutate` against the in-memory object, and saves
@@ -74,6 +115,7 @@ export function createRoomCommands(deps: RoomCommandDeps): RoomCommands {
         throw new RoomError("not_found", "No room uses that code.");
       }
       const result = mutate(found.state);
+      rooms.set(code, found.state);
       if (await store.save(code, found.state, found.version)) {
         return result;
       }
@@ -89,6 +131,7 @@ export function createRoomCommands(deps: RoomCommandDeps): RoomCommands {
     if (!found) {
       throw new RoomError("not_found", "No room uses that code.");
     }
+    rooms.set(roomCode.toUpperCase(), found.state);
     return read(found.state);
   }
 
@@ -106,8 +149,8 @@ export function createRoomCommands(deps: RoomCommandDeps): RoomCommands {
           paused: false,
           pauseStartedAt: null,
           contentMode: "work_safe",
-          promptCursor: 0,
-          teams: TEAM_SEEDS.map((seed) => ({ ...seed, wins: 0 })),
+          nextPromptId: pickNextPrompt(pack, deps.random, null).id,
+          teams: TEAM_SEEDS.map((seed) => ({ ...seed, totalScore: 0, roundsWon: 0 })),
           players: [
             {
               id: actor.id,
@@ -117,12 +160,13 @@ export function createRoomCommands(deps: RoomCommandDeps): RoomCommands {
               isReady: false,
               lastSeenAt: createdAt,
               joinedRound: 0,
-            },
-          ],
+          },
+        ],
           rounds: [],
           teamMessages: [],
         };
         if (await store.insert(room)) {
+          rooms.set(code, room);
           return { roomCode: code, url: deps.roomUrl(code) };
         }
       }
@@ -258,14 +302,8 @@ export function createRoomCommands(deps: RoomCommandDeps): RoomCommands {
       await withRoom(roomCode, (room) => {
         tick(room, ctxFor(now()));
         const player = requirePlayer(room, actor);
-        if (!player.teamId) {
-          throw new RoomError("no_team", "Join a team to chat.");
-        }
-        room.teamMessages.push({
-          teamId: player.teamId,
-          playerId: player.id,
-          body,
-        });
+        if (!player.teamId) throw new RoomError("no_team", "Join a team to chat.");
+        room.teamMessages.push({ teamId: player.teamId, playerId: player.id, body });
       });
     },
 
@@ -273,7 +311,7 @@ export function createRoomCommands(deps: RoomCommandDeps): RoomCommands {
       await commands.sendTeamMessage(actor, roomCode, emoji);
     },
 
-    async pause(actor, roomCode) {
+        async pause(actor, roomCode) {
       await withRoom(roomCode, (room) => {
         tick(room, ctxFor(now()));
         requireHost(room, actor);
@@ -398,10 +436,10 @@ export function createRoomCommands(deps: RoomCommandDeps): RoomCommands {
         room.status = "lobby";
         room.paused = false;
         room.pauseStartedAt = null;
-        room.promptCursor = 0;
         room.rounds = [];
         room.teamMessages = [];
-        room.teams = TEAM_SEEDS.map((seed) => ({ ...seed, wins: 0 }));
+        room.nextPromptId = pickNextPrompt(pack, deps.random, null).id;
+        room.teams = TEAM_SEEDS.map((seed) => ({ ...seed, totalScore: 0, roundsWon: 0 }));
         for (const player of room.players) {
           player.teamId = null;
           player.isReady = false;

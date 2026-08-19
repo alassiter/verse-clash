@@ -1,21 +1,27 @@
-import type { AssembledSegment, DealtAssignment } from "@/lib/content";
-import type { Phase } from "@/lib/game/types";
+import type { AssembledSegment, ChaosCardId, DealtAssignment } from "@/lib/content";
+import type { TeamRoundScore } from "@/lib/scoring/combos";
+import type { JudgeScore, Phase } from "@/lib/game/types";
 
 export const TEAM_SEEDS = [
-  { id: "goblin", name: "Goblin", color: "green" },
-  { id: "waffle", name: "Waffle", color: "amber" },
-  { id: "penguin", name: "Penguin", color: "slate" },
-  { id: "stapler", name: "Stapler", color: "rose" },
+  { id: "goblin", name: "Red", color: "red" },
+  { id: "waffle", name: "Blue", color: "blue" },
+  { id: "penguin", name: "Green", color: "green" },
+  { id: "stapler", name: "Yellow", color: "yellow" },
 ] as const;
 
 export const REVEAL_EMOJIS = ["😂", "👏", "🤯", "❤️", "😮"] as const;
 export const DISCONNECT_AFTER_MS = 30_000;
+/** Assignment playerId prefix for slots a solo team had no one around to fill.
+ * Encodes the team id directly since there's no real player record behind it. */
+export const AUTO_FILL_PLAYER_PREFIX = "auto-";
+export const AUTO_FILL_DISPLAY_NAME = "Auto-fill";
 
 export type TeamState = {
   id: string;
   name: string;
   color: string;
-  wins: number;
+  totalScore: number;
+  roundsWon: number;
 };
 
 export type PlayerState = {
@@ -28,27 +34,41 @@ export type PlayerState = {
   joinedRound: number;
 };
 
-export type AssignmentState = DealtAssignment & {
-  selectedOptionId: string | null;
-  submittedAt: number | null;
-};
-
 export type TeamMessageState = {
   teamId: string;
   playerId: string;
   body: string;
 };
 
+export type AssignmentState = DealtAssignment & {
+  selectedOptionId: string | null;
+  submittedAt: number | null;
+};
+
+export type PendingComposition = {
+  requestId: string;
+  status: "pending" | "resolved" | "timed_out" | "cancelled";
+  startedAt: number;
+};
+
 export type RoundState = {
   id: string;
   number: number;
-  type: "straight";
+  type: "straight" | "chaos";
+  chaosCard: ChaosCardId | null;
   promptId: string;
   templateId: string;
   phase: Phase;
   phaseEndsAt: number | null;
   assignments: AssignmentState[];
-  compositions: Array<{ teamId: string; segments: AssembledSegment[] }>;
+  pendingComposition: PendingComposition | null;
+  compositions: Array<{
+    teamId: string;
+    segments: AssembledSegment[];
+    source: "ai" | "deterministic_fallback";
+  }>;
+  judging: JudgeScore[] | null;
+  scoring: TeamRoundScore[] | null;
   reveal: { teamIndex: number; segmentIndex: number };
   votes: Array<{ playerId: string; teamId: string }>;
   reactions: Array<{
@@ -67,7 +87,9 @@ export type RoomState = {
   paused: boolean;
   pauseStartedAt: number | null;
   contentMode: "work_safe";
-  promptCursor: number;
+  /** The prompt id the next round will use, chosen at random when the previous
+   * round ended (or at room creation) so rounds never play back in a fixed order. */
+  nextPromptId: string;
   teams: TeamState[];
   players: PlayerState[];
   rounds: RoundState[];

@@ -1,6 +1,7 @@
 import { loadContentPack, type ContentPack } from "@/lib/content";
 import { createRoomCommands, type RoomCommands } from "@/lib/game";
 import { createInMemoryRoomStore, type RoomStore } from "@/lib/game/room-store";
+import type { AiComposer } from "@/lib/game/types";
 
 export function samplePack(): ContentPack {
   const result = loadContentPack();
@@ -15,6 +16,7 @@ export function createGame(options?: {
   now?: number;
   random?: () => number;
   store?: RoomStore;
+  ai?: AiComposer;
 }): {
   commands: RoomCommands;
   advanceTime: (ms: number) => void;
@@ -28,6 +30,7 @@ export function createGame(options?: {
     random: options?.random ?? (() => 0.1),
     roomUrl: (code) => `/room/${code}`,
     store: options?.store ?? createInMemoryRoomStore(),
+  ai: options?.ai,
   });
   return {
     commands,
@@ -67,6 +70,15 @@ export async function enterSelecting(
   await commands.heartbeat(host, roomCode);
 }
 
+/**
+ * The default AI composer resolves off the game's fake clock — it settles via
+ * real microtask/macrotask ticks. Await this after any action that may cross
+ * the selecting → composing → reveal boundary before asserting on phase.
+ */
+export function flushAsync(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
 export async function playThroughSelection(
   commands: RoomCommands,
   advanceTime: (ms: number) => void,
@@ -83,6 +95,7 @@ export async function playThroughSelection(
     const optionId = (await commands.getPlayerView(actor, roomCode)).selection!.options[0].id;
     await commands.submitChoice(actor, roomCode, optionId);
   }
+  await flushAsync();
   return roomCode;
 }
 

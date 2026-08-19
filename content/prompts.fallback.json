@@ -1,0 +1,138 @@
+[
+  {
+    "id": "warning-from-future",
+    "text": "Create a warning message from the future.",
+    "tease": "It's already too late.",
+    "formatHint": "future warning",
+    "compatibleTemplateIds": ["three-principles"],
+    "workplaceSafe": true
+  },
+  {
+    "id": "ridiculous-breakup",
+    "text": "Write a breakup message between two completely ridiculous things.",
+    "tease": "It's not you, it's everything.",
+    "formatHint": "breakup message",
+    "compatibleTemplateIds": ["three-principles"],
+    "workplaceSafe": true
+  },
+  {
+    "id": "worst-vacation",
+    "text": "Describe the worst vacation anyone has ever taken.",
+    "tease": "Nobody is sending a postcard.",
+    "formatHint": "vacation story",
+    "compatibleTemplateIds": ["three-principles"],
+    "workplaceSafe": true
+  },
+  {
+    "id": "unimportant-battle",
+    "text": "Write a heroic speech before an incredibly unimportant battle.",
+    "tease": "History will barely remember this.",
+    "formatHint": "heroic speech",
+    "compatibleTemplateIds": ["three-principles"],
+    "workplaceSafe": true
+  },
+  {
+    "id": "surviving-monday",
+    "text": "Create a poem about surviving Monday morning.",
+    "tease": "A survivor's tale.",
+    "formatHint": "survival poem",
+    "compatibleTemplateIds": ["three-principles"],
+    "workplaceSafe": true
+  },
+  {
+    "id": "worst-detective",
+    "text": "Write a message left behind by the world's worst detective.",
+    "tease": "The case remains unsolved. Obviously.",
+    "formatHint": "detective note",
+    "compatibleTemplateIds": ["three-principles"],
+    "workplaceSafe": true
+  },
+  {
+    "id": "mysterious-creature",
+    "text": "Describe a mysterious creature nobody should have discovered.",
+    "tease": "Some things should stay buried.",
+    "formatHint": "creature report",
+    "compatibleTemplateIds": ["three-principles"],
+    "workplaceSafe": true
+  },
+  {
+    "id": "unwanted-product-ad",
+    "text": "Write an advertisement for a product nobody asked for.",
+    "tease": "As seen on nowhere.",
+    "formatHint": "product ad",
+    "compatibleTemplateIds": ["three-principles"],
+    "workplaceSafe": true
+  },
+  {
+    "id": "nonsense-prophecy",
+    "text": "Create a prophecy that sounds important but makes almost no sense.",
+    "tease": "The prophecy is very confident.",
+    "formatHint": "ancient prophecy",
+    "compatibleTemplateIds": ["three-principles"],
+    "workplaceSafe": true
+  },
+  {
+    "id": "pirate-disappointing-crew",
+    "text": "Write a pirate captain's motivational speech to a deeply disappointing crew.",
+    "tease": "Yo ho ho, sort of.",
+    "formatHint": "pirate speech",
+    "compatibleTemplateIds": ["three-principles"],
+    "workplaceSafe": true
+  },
+  {
+    "id": "strangest-school-day-one",
+    "text": "Describe the first day at the strangest school imaginable.",
+    "tease": "Orientation went sideways fast.",
+    "formatHint": "first-day story",
+    "compatibleTemplateIds": ["three-principles"],
+    "workplaceSafe": true
+  },
+  {
+    "id": "robot-romantic-confession",
+    "text": "Write a romantic confession from a robot trying very hard to understand love.",
+    "tease": "Love.exe is still loading.",
+    "formatHint": "robot confession",
+    "compatibleTemplateIds": ["three-principles"],
+    "workplaceSafe": true
+  },
+  {
+    "id": "terrible-fantasy-opening",
+    "text": "Create the opening paragraph of a terrible fantasy novel.",
+    "tease": "Chapter one. Brace yourself.",
+    "formatHint": "fantasy novel opener",
+    "compatibleTemplateIds": ["three-principles"],
+    "workplaceSafe": true
+  },
+  {
+    "id": "absurd-royal-law",
+    "text": "Write a speech from a king or queen announcing a completely absurd new law.",
+    "tease": "By royal decree, obviously.",
+    "formatHint": "royal decree",
+    "compatibleTemplateIds": ["three-principles"],
+    "workplaceSafe": true
+  },
+  {
+    "id": "dinner-becomes-adventure",
+    "text": "Describe what happens when a normal dinner suddenly becomes an epic adventure.",
+    "tease": "Pass the salt. And the sword.",
+    "formatHint": "dinner adventure",
+    "compatibleTemplateIds": ["three-principles"],
+    "workplaceSafe": true
+  },
+  {
+    "id": "useless-achievement-poem",
+    "text": "Write a poem celebrating someone's greatest and most useless achievement.",
+    "tease": "An ode to doing something, sort of.",
+    "formatHint": "achievement poem",
+    "compatibleTemplateIds": ["three-principles"],
+    "workplaceSafe": true
+  },
+  {
+    "id": "minor-emergency-announcement",
+    "text": "Create a dramatic emergency announcement about something extremely minor.",
+    "tease": "This is not a drill. Or is it?",
+    "formatHint": "emergency announcement",
+    "compatibleTemplateIds": ["three-principles"],
+    "workplaceSafe": true
+  }
+]

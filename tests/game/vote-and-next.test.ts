@@ -60,4 +60,25 @@ describe("vote and next round", () => {
     await commands.endRound(host, roomCode);
     expect((await commands.getPlayerView(priya, roomCode)).phase).toBe("standings");
   });
+
+  it("ends the game automatically once the third round finishes", () => {
+    const { commands } = createGame();
+    const roomCode = openLobby(commands);
+
+    commands.startRound(host, roomCode); // round 1
+    commands.endRound(host, roomCode);
+    expect(commands.getPlayerView(priya, roomCode).phase).toBe("standings");
+
+    commands.startNextRound(host, roomCode); // round 2
+    commands.endRound(host, roomCode);
+    expect(commands.getPlayerView(priya, roomCode).phase).toBe("standings");
+
+    commands.startNextRound(host, roomCode); // round 3 — the final round
+    commands.endRound(host, roomCode);
+    const final = commands.getPlayerView(priya, roomCode);
+    expect(final.phase).toBe("ended");
+    expect(final.standings).toBeDefined();
+
+    expect(() => commands.startNextRound(host, roomCode)).toThrow();
+  });
 });

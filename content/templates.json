@@ -1,18 +1,38 @@
 [
   {
     "id": "three-principles",
-    "promptIds": ["vision", "toast", "keynote"],
-    "title": "Three principles",
+    "promptIds": [
+      "love-poem-unromantic",
+      "clueless-inspiration",
+      "villain-final-words",
+      "warning-from-future",
+      "ridiculous-breakup",
+      "worst-vacation",
+      "unimportant-battle",
+      "surviving-monday",
+      "worst-detective",
+      "mysterious-creature",
+      "unwanted-product-ad",
+      "nonsense-prophecy",
+      "pirate-disappointing-crew",
+      "strangest-school-day-one",
+      "robot-romantic-confession",
+      "terrible-fantasy-opening",
+      "absurd-royal-law",
+      "dinner-becomes-adventure",
+      "useless-achievement-poem",
+      "minor-emergency-announcement"
+    ],
+    "title": "Four words",
     "segments": [
-      { "type": "static", "text": "Our new strategic vision is built on three principles: " },
       { "type": "slot", "slotId": "principle-adj" },
       { "type": "static", "text": ", " },
       { "type": "slot", "slotId": "principle-noun" },
       { "type": "static", "text": ", and " },
       { "type": "slot", "slotId": "principle-phrase" },
-      { "type": "static", "text": ", which we will " },
+      { "type": "static", "text": " — to " },
       { "type": "slot", "slotId": "principle-verb" },
-      { "type": "static", "text": " together." }
+      { "type": "static", "text": "." }
     ]
   }
 ]

@@ -4,8 +4,9 @@ import {
   dealForTeam,
   loadContentPack,
   validateContentPack,
+  validatePromptCandidate,
 } from "@/lib/content";
-import type { ContentPack, Word } from "@/lib/content";
+import type { ContentPack, Prompt, Word } from "@/lib/content";
 
 function loadSample(): ContentPack {
   const result = loadContentPack();
@@ -29,7 +30,8 @@ describe("content-pack validator", () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.pack.contentMode).toBe("work_safe");
-    expect(result.pack.prompts).toHaveLength(3);
+    // 3 authored prompts + the curated fallback pool concatenated at load time.
+    expect(result.pack.prompts.length).toBeGreaterThanOrEqual(20);
     expect(result.pack.slots).toHaveLength(4);
   });
 
@@ -86,6 +88,41 @@ describe("content-pack validator", () => {
     expect(result.issues.some((issue) => issue.code === "content_mode")).toBe(
       true,
     );
+  });
+
+  it("validatePromptCandidate accepts a well-formed generated prompt without registering it", () => {
+    const pack = loadSample();
+    const candidate: Prompt = {
+      id: "gen-test-1",
+      text: "Announce the office's new mascot.",
+      tease: "It's a stapler with googly eyes.",
+      formatHint: "mascot reveal",
+      compatibleTemplateIds: ["three-principles"],
+      workplaceSafe: true,
+    };
+    expect(validatePromptCandidate(pack, candidate)).toEqual([]);
+    expect(pack.prompts.some((prompt) => prompt.id === "gen-test-1")).toBe(false);
+  });
+
+  it("validatePromptCandidate rejects an unknown template and blocked terms", () => {
+    const pack = loadSample();
+    const badTemplate = validatePromptCandidate(pack, {
+      id: "gen-test-2",
+      text: "Announce something.",
+      formatHint: "announcement",
+      compatibleTemplateIds: ["no-such-template"],
+      workplaceSafe: true,
+    });
+    expect(badTemplate.some((issue) => issue.code === "missing_template")).toBe(true);
+
+    const blocked = validatePromptCandidate(pack, {
+      id: "gen-test-3",
+      text: "Give a toast to the office's blood drive.",
+      formatHint: "toast",
+      compatibleTemplateIds: ["three-principles"],
+      workplaceSafe: true,
+    });
+    expect(blocked.some((issue) => issue.code === "blocked_term")).toBe(true);
   });
 
   it("deals five unique options per player with a 2/2/1 chaos mix", () => {
@@ -178,10 +215,6 @@ describe("content-pack validator", () => {
 
     expect(result.segments).toEqual([
       {
-        type: "static",
-        text: "Our new strategic vision is built on three principles: ",
-      },
-      {
         type: "contribution",
         text: "collaborative",
         playerId: "p1",
@@ -204,15 +237,15 @@ describe("content-pack validator", () => {
         displayName: "Lee",
         slotId: "principle-phrase",
       },
-      { type: "static", text: ", which we will " },
+      { type: "static", text: " — to " },
       {
         type: "contribution",
-        text: "proceed",
+        text: "continue",
         playerId: "house",
         displayName: "House",
         slotId: "principle-verb",
       },
-      { type: "static", text: " together." },
+      { type: "static", text: "." },
     ]);
   });
 });

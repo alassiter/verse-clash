@@ -19,10 +19,10 @@ describe("seat teams and ready up", () => {
       .filter((player) => !player.isHost)
       .map((player) => `${player.displayName}:${player.teamName}`);
     expect(names).toEqual([
-      "Priya:Stapler",
-      "Sam:Goblin",
-      "Lee:Waffle",
-      "Jo:Penguin",
+      "Priya:Yellow",
+      "Sam:Red",
+      "Lee:Blue",
+      "Jo:Green",
     ]);
     expect((await commands.getPlayerView(priya, created.roomCode)).team?.name).toBe(
       "Stapler",
@@ -39,7 +39,7 @@ describe("seat teams and ready up", () => {
       afterShuffle
         .filter((player) => !player.isHost)
         .every((player) =>
-          ["Goblin", "Waffle", "Penguin", "Stapler"].includes(player.teamName ?? ""),
+          ["Red", "Blue", "Green", "Yellow"].includes(player.teamName ?? ""),
         ),
     ).toBe(true);
     expect(afterShuffle.find((player) => player.isHost)?.teamName).toBeNull();

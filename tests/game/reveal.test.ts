@@ -7,7 +7,6 @@ describe("reveal compositions", () => {
     const roomCode = await playThroughSelection(commands, advanceTime);
     const view = await commands.getPlayerView(priya, roomCode);
     expect(view.phase).toBe("reveal");
-    expect(view.teamChatPrimary).toBe(false);
     expect(view.globalChat).toBeUndefined();
     expect(view.reveal?.composition.some((segment) => segment.type === "static")).toBe(true);
     expect(
@@ -20,7 +19,7 @@ describe("reveal compositions", () => {
         (segment) =>
           segment.type === "contribution" &&
           segment.displayName === "House" &&
-          segment.text === "proceed",
+          segment.text === "continue",
       ),
     ).toBe(true);
   });

@@ -1,24 +1,25 @@
 [
   {
-    "id": "vision",
-    "text": "Announce the company's new strategic vision.",
-    "tease": "Board-ready. Spiritually a waffle.",
-    "formatHint": "keynote manifesto",
+    "id": "love-poem-unromantic",
+    "text": "Write a love poem about something completely unromantic.",
+    "tease": "Roses are red, this is not.",
+    "formatHint": "love poem",
     "compatibleTemplateIds": ["three-principles"],
     "workplaceSafe": true
   },
   {
-    "id": "toast",
-    "text": "Give a heartfelt toast to a beloved piece of office equipment.",
-    "tease": "Someone has to thank the printer.",
-    "formatHint": "wedding toast",
+    "id": "clueless-inspiration",
+    "text": "Give an inspirational speech from someone who has absolutely no idea what they're doing.",
+    "tease": "No plan. Incredible energy.",
+    "formatHint": "inspirational speech",
     "compatibleTemplateIds": ["three-principles"],
     "workplaceSafe": true
   },
   {
-    "id": "keynote",
-    "text": "Open the product launch keynote for a tool nobody asked for.",
-    "formatHint": "product keynote",
+    "id": "villain-final-words",
+    "text": "Write the final words of an overly dramatic villain.",
+    "tease": "The monologue nobody asked for.",
+    "formatHint": "villain monologue",
     "compatibleTemplateIds": ["three-principles"],
     "workplaceSafe": true
   }
