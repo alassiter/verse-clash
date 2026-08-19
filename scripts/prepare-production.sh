@@ -272,22 +272,21 @@ write_local_env NEXT_PUBLIC_SUPABASE_ANON_KEY "$NEXT_PUBLIC_SUPABASE_ANON_KEY"
 write_local_env SUPABASE_SERVICE_ROLE_KEY "$SUPABASE_SERVICE_ROLE_KEY"
 require_secrets_untracked
 
-# ── 4. Anonymous auth ─────────────────────────────────────────────────────
-stage "Enable Anonymous sign-ins"
-say "Players join with a room code and display name — no email accounts."
-if [[ -n "${NEXT_PUBLIC_SUPABASE_URL:-}" ]]; then
-  open_url "https://supabase.com/dashboard/project/$(supabase_project_ref "$NEXT_PUBLIC_SUPABASE_URL")/auth/providers"
+# ── 4. Cron secret ────────────────────────────────────────────────────────
+stage "Generate a cron secret"
+say "app/api/cron/cleanup-rooms deletes stale rooms daily. Vercel authorizes"
+say "that call with a shared secret you set once, on both sides."
+if command -v openssl >/dev/null 2>&1; then
+  CRON_SECRET=$(openssl rand -hex 32)
+  note "generated a random secret with openssl"
 else
-  open_url "https://supabase.com/dashboard"
-  step "Open your project → Authentication → Sign In / Providers."
+  ask_secret CRON_SECRET "Paste a random secret (16+ chars):"
 fi
-step "Find Allow anonymous sign-ins and turn it on. Save if the page asks."
-note "CAPTCHA is optional later if anonymous sign-ups get abused."
-pause "Anonymous sign-ins enabled?"
+write_local_env CRON_SECRET "$CRON_SECRET"
 
 # ── 5. Schema migration ───────────────────────────────────────────────────
 stage "Apply the game schema"
-say "Run the in-repo migration so rooms, RLS, and Realtime publication exist."
+say "Run the in-repo migration so the rooms table (state jsonb + version) exists."
 if [[ -n "${NEXT_PUBLIC_SUPABASE_URL:-}" ]]; then
   open_url "https://supabase.com/dashboard/project/$(supabase_project_ref "$NEXT_PUBLIC_SUPABASE_URL")/sql/new"
 else
@@ -296,7 +295,7 @@ else
 fi
 step "Open supabase/migrations/20260818120000_game_schema.sql in your editor."
 step "Paste the full file into the SQL Editor and run it."
-step "Confirm tables such as rooms, players, teams, and rounds appear with no error."
+step "Confirm the rooms table appears with no error."
 if ! confirm "Did the migration run without errors?"; then
   SKIPPED+=("Apply supabase/migrations/20260818120000_game_schema.sql in the SQL Editor")
   warn "schema not applied — hosted rooms will not work until it is"
@@ -326,9 +325,10 @@ fi
 step "Add NEXT_PUBLIC_SUPABASE_URL — the Project URL from earlier. Environments: Production and Preview."
 step "Add NEXT_PUBLIC_SUPABASE_ANON_KEY — the publishable/anon key. Production and Preview."
 step "Add SUPABASE_SERVICE_ROLE_KEY — the secret/service_role key. Production and Preview. Turn on Sensitive."
+step "Add CRON_SECRET — the value generated earlier. Production only. Turn on Sensitive."
 step "Do not upload .env.local, do not commit it, and do not add these to GitHub Actions secrets."
-if ! confirm "Are all three variables saved on Vercel?"; then
-  SKIPPED+=("Add NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY on Vercel (Sensitive for the service-role key)")
+if ! confirm "Are all four variables saved on Vercel?"; then
+  SKIPPED+=("Add NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, CRON_SECRET on Vercel (Sensitive for the service-role key and cron secret)")
   warn "Vercel env vars not confirmed — production will not see Supabase"
 fi
 require_secrets_untracked
