@@ -13,6 +13,19 @@ import { Countdown, PhaseBanner } from "@/components/ui";
 // back to the landing page rather than leaving the host on a dead screen.
 const TIMEOUT_FAIL_THRESHOLD = 3;
 
+function DeployStamp() {
+  const sha = process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA;
+  const label = sha ? sha.slice(0, 7) : "local";
+  return (
+    <p
+      className="fixed bottom-2 right-3 z-20 font-mono text-xs text-stone-800/50"
+      title={sha ?? "local build"}
+    >
+      {label}
+    </p>
+  );
+}
+
 export function HostShell(props: { roomCode: string }) {
   const [view, setView] = useState<HostView | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -59,12 +72,22 @@ export function HostShell(props: { roomCode: string }) {
 
   if (error) {
     return (
-      <main className="p-8 text-2xl">
-        {error} — <a className="underline" href={`/room/${props.roomCode}`}>player view</a>
-      </main>
+      <>
+        <main className="p-8 text-2xl">
+          {error} — <a className="underline" href={`/room/${props.roomCode}`}>player view</a>
+        </main>
+        <DeployStamp />
+      </>
     );
   }
-  if (!view) return <p className="p-8 text-2xl">Loading host board…</p>;
+  if (!view) {
+    return (
+      <>
+        <p className="p-8 text-2xl">Loading host board…</p>
+        <DeployStamp />
+      </>
+    );
+  }
 
   return (
     <div className="min-h-full">
@@ -84,6 +107,7 @@ export function HostShell(props: { roomCode: string }) {
           </a>
         </p>
       </main>
+      <DeployStamp />
     </div>
   );
 }
