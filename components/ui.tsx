@@ -1,6 +1,7 @@
 import type { ButtonHTMLAttributes, ReactNode } from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
+import { playClick, playTick, playTimesUp } from "@/lib/sfx";
 
 export function PhaseBanner(props: {
   phaseName: string;
@@ -50,7 +51,7 @@ export function BigButton(
     tone?: "primary" | "secondary" | "ghost" | "danger";
   },
 ) {
-  const { tone = "primary", className = "", ...rest } = props;
+  const { tone = "primary", className = "", onClick, ...rest } = props;
   const tones = {
     primary: "bg-comic-red text-white hover:brightness-110",
     secondary: "bg-comic-blue text-white hover:brightness-110",
@@ -60,6 +61,10 @@ export function BigButton(
   return (
     <button
       className={`comic-press rounded-2xl px-6 py-4 font-comic text-xl uppercase tracking-wide disabled:opacity-50 disabled:active:translate-x-0 disabled:active:translate-y-0 ${tones[tone]} ${className}`}
+      onClick={(event) => {
+        playClick();
+        onClick?.(event);
+      }}
       {...rest}
     />
   );
@@ -94,17 +99,35 @@ export function Panel(props: {
 
 export function Countdown(props: { endsAt?: number; paused?: boolean }) {
   const [now, setNow] = useState(0);
+  const lastSecondRef = useRef<number | null>(null);
   useEffect(() => {
     const id = window.setInterval(() => setNow(Date.now()), 250);
     return () => window.clearInterval(id);
   }, []);
+
+  const remaining =
+    props.paused || !props.endsAt || !now
+      ? undefined
+      : Math.max(0, Math.ceil((props.endsAt - now) / 1000));
+
+  useEffect(() => {
+    if (remaining === undefined) return;
+    const previous = lastSecondRef.current;
+    if (remaining === previous) return;
+    lastSecondRef.current = remaining;
+    if (previous === null) return;
+    if (remaining === 0) {
+      playTimesUp();
+    } else if (remaining < 10) {
+      playTick();
+    }
+  }, [remaining]);
+
   if (!props.endsAt || !now) return <span className="font-mono text-xl">—</span>;
-  const remaining = props.paused
-    ? "paused"
-    : Math.max(0, Math.ceil((props.endsAt - now) / 1000));
+  const display = props.paused ? "paused" : remaining;
   return (
     <span className="font-mono text-2xl font-bold tabular-nums">
-      {typeof remaining === "number" ? `${remaining}s` : remaining}
+      {typeof display === "number" ? `${display}s` : display}
     </span>
   );
 }

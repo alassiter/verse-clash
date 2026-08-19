@@ -55,13 +55,13 @@ describe("vote and next round", () => {
     expect(commands.getPlayerView(priya, roomCode).phase).toBe("standings");
   });
 
-  it("ends the game automatically once the third round finishes", () => {
-    const { commands } = createGame();
-    const roomCode = openLobby(commands);
-
-    commands.startRound(host, roomCode); // round 1
-    commands.endRound(host, roomCode);
-    expect(commands.getPlayerView(priya, roomCode).phase).toBe("standings");
+  it("ends the game automatically once the third round finishes with a clear leader", async () => {
+    const { commands, advanceTime } = createGame();
+    const roomCode = await reachVoting(commands, advanceTime);
+    const goblinId = commands.getPlayerView(priya, roomCode).team!.id;
+    commands.vote(priya, roomCode, goblinId);
+    advanceTime(30_001);
+    commands.heartbeat(host, roomCode); // round 1 — goblin picks up a Crowd Favorite bonus
 
     commands.startNextRound(host, roomCode); // round 2
     commands.endRound(host, roomCode);
@@ -72,7 +72,38 @@ describe("vote and next round", () => {
     const final = commands.getPlayerView(priya, roomCode);
     expect(final.phase).toBe("ended");
     expect(final.standings).toBeDefined();
+    expect(final.winner?.teamNames).toEqual([final.team!.name]);
 
     expect(() => commands.startNextRound(host, roomCode)).toThrow();
+  });
+
+  it("keeps playing sudden-death rounds instead of ending on a tie after round 3", () => {
+    const { commands } = createGame();
+    const roomCode = openLobby(commands);
+
+    commands.startRound(host, roomCode); // round 1
+    commands.endRound(host, roomCode);
+    commands.startNextRound(host, roomCode); // round 2
+    commands.endRound(host, roomCode);
+    commands.startNextRound(host, roomCode); // round 3 — regulation ends, still tied 0-0
+    commands.endRound(host, roomCode);
+
+    const afterRoundThree = commands.getPlayerView(priya, roomCode);
+    expect(afterRoundThree.phase).toBe("standings");
+    expect(afterRoundThree.isTiebreaker).toBe(false);
+
+    commands.startNextRound(host, roomCode); // round 4 — sudden death, since nobody broke the tie
+    const tiebreakerRound = commands.getPlayerView(priya, roomCode);
+    expect(tiebreakerRound.phase).toBe("prompt_reveal");
+    commands.endRound(host, roomCode);
+
+    const afterTiebreaker = commands.getPlayerView(priya, roomCode);
+    expect(afterTiebreaker.phase).toBe("standings");
+    expect(afterTiebreaker.isTiebreaker).toBe(true);
+
+    // The tie is never going to break on its own here (nobody is scoring), so
+    // the host always has the option to call it manually.
+    commands.endGame(host, roomCode);
+    expect(commands.getPlayerView(priya, roomCode).phase).toBe("ended");
   });
 });

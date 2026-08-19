@@ -3,6 +3,7 @@
 import type { PlayerView } from "@/lib/game";
 import { BigButton, Panel } from "@/components/ui";
 import { sendRevealReactionAction, setReadyAction, submitChoiceAction, voteAction } from "@/app/actions/room";
+import { playClick } from "@/lib/sfx";
 
 export function Lobby(props: { view: PlayerView; roomCode: string }) {
   const players = props.view.lobby?.players ?? [];
@@ -200,7 +201,10 @@ export function RevealStage(props: { view: PlayerView; roomCode: string }) {
             key={emoji}
             type="button"
             className="rounded-2xl bg-orange-100 px-4 py-3 text-4xl"
-            onClick={() => void sendRevealReactionAction(props.roomCode, emoji)}
+            onClick={() => {
+              playClick();
+              void sendRevealReactionAction(props.roomCode, emoji);
+            }}
           >
             {emoji}
           </button>
@@ -231,6 +235,11 @@ export function StandingsBoard(props: { view: PlayerView }) {
   const rows = [...(props.view.standings ?? [])].sort((a, b) => b.totalScore - a.totalScore);
   return (
     <Panel tone="red" title="Standings">
+      {props.view.isTiebreaker ? (
+        <p className="mb-4 text-center text-lg font-bold text-red-700">
+          It&rsquo;s a tie! Sudden-death round &mdash; next team to lead wins.
+        </p>
+      ) : null}
       <ul className="space-y-6">
         {rows.map((row) => (
           <li key={row.teamId}>
