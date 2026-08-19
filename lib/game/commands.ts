@@ -58,7 +58,7 @@ function touch(player: PlayerState, now: number) {
 }
 
 export function createRoomCommands(deps: RoomCommandDeps): RoomCommands {
-  const rooms = new Map<string, RoomState>();
+  const rooms = deps.rooms ?? new Map<string, RoomState>();
   const pack = deps.pack;
   const now = () => deps.clock.now();
   let codeSerial = 0;
@@ -273,7 +273,7 @@ export function createRoomCommands(deps: RoomCommandDeps): RoomCommands {
       enter(room, ctxFor(now()), "standings");
     },
 
-    sendRevealReaction(actor, roomCode, emoji) {
+    sendRevealReaction(actor, roomCode, emoji, segmentIndex) {
       const room = roomAfterTick(roomCode);
       const player = requirePlayer(room, actor);
       if (current(room) !== "reveal") {
@@ -286,7 +286,29 @@ export function createRoomCommands(deps: RoomCommandDeps): RoomCommands {
       if (!REVEAL_EMOJIS.includes(emoji as (typeof REVEAL_EMOJIS)[number])) {
         throw new RoomError("bad_emoji", "Use one of 😂 👏 🤯 ❤️ 😮");
       }
-      round.reactions.push({ playerId: player.id, emoji });
+      const shown = round.compositions[round.reveal.teamIndex];
+      const segment = shown?.segments[segmentIndex];
+      if (
+        !segment ||
+        segment.type !== "contribution" ||
+        segmentIndex > round.reveal.segmentIndex
+      ) {
+        throw new RoomError("bad_segment", "That word is not on stage yet.");
+      }
+      round.reactions = round.reactions.filter(
+        (entry) =>
+          !(
+            entry.playerId === player.id &&
+            entry.teamIndex === round.reveal.teamIndex &&
+            entry.segmentIndex === segmentIndex
+          ),
+      );
+      round.reactions.push({
+        playerId: player.id,
+        emoji,
+        teamIndex: round.reveal.teamIndex,
+        segmentIndex,
+      });
     },
 
     vote(actor, roomCode, teamId) {
@@ -318,6 +340,26 @@ export function createRoomCommands(deps: RoomCommandDeps): RoomCommands {
       const room = roomAfterTick(roomCode);
       requireHost(room, actor);
       enter(room, ctxFor(now()), "ended");
+    },
+
+    restartGame(actor, roomCode) {
+      const room = roomAfterTick(roomCode);
+      requireHost(room, actor);
+      if (current(room) !== "ended") {
+        throw new RoomError("wrong_phase", "End the game before starting over.");
+      }
+      room.status = "lobby";
+      room.paused = false;
+      room.pauseStartedAt = null;
+      room.promptCursor = 0;
+      room.rounds = [];
+      room.teamMessages = [];
+      room.teams = TEAM_SEEDS.map((seed) => ({ ...seed, wins: 0 }));
+      for (const player of room.players) {
+        player.teamId = null;
+        player.isReady = false;
+        player.joinedRound = 0;
+      }
     },
   };
 

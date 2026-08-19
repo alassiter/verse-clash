@@ -24,6 +24,18 @@ export type ChatMessageView = {
   body: string;
 };
 
+export type RevealSegmentView =
+  | { type: "static"; text: string }
+  | {
+      type: "contribution";
+      text: string;
+      playerId: string;
+      displayName: string;
+      slotId: string;
+      segmentIndex: number;
+      votedEmojis: string[];
+    };
+
 export type PlayerView = {
   phase: Phase;
   phaseName: string;
@@ -57,9 +69,8 @@ export type PlayerView = {
   reveal?: {
     teamName: string;
     composition: AssembledSegment[];
-    visibleSegments: AssembledSegment[];
+    visibleSegments: RevealSegmentView[];
     attribution?: string;
-    bursts: { emoji: string }[];
   };
   voting?: { teams: { id: string; name: string }[] };
   standings?: { teamId: string; teamName: string; wins: number }[];
@@ -110,10 +121,16 @@ export type RoomCommands = {
   pause: (actor: Actor, roomCode: string) => void;
   resume: (actor: Actor, roomCode: string) => void;
   endRound: (actor: Actor, roomCode: string) => void;
-  sendRevealReaction: (actor: Actor, roomCode: string, emoji: string) => void;
+  sendRevealReaction: (
+    actor: Actor,
+    roomCode: string,
+    emoji: string,
+    segmentIndex: number,
+  ) => void;
   vote: (actor: Actor, roomCode: string, teamId: string) => void;
   startNextRound: (actor: Actor, roomCode: string) => void;
   endGame: (actor: Actor, roomCode: string) => void;
+  restartGame: (actor: Actor, roomCode: string) => void;
 };
 
 export type Clock = { now: () => number };
@@ -123,4 +140,5 @@ export type RoomCommandDeps = {
   clock: Clock;
   random: () => number;
   roomUrl: (code: string) => string;
+  rooms?: Map<string, import("@/lib/game/state").RoomState>;
 };

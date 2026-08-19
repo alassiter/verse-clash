@@ -51,7 +51,12 @@ export type RoundState = {
   compositions: Array<{ teamId: string; segments: AssembledSegment[] }>;
   reveal: { teamIndex: number; segmentIndex: number };
   votes: Array<{ playerId: string; teamId: string }>;
-  reactions: Array<{ playerId: string; emoji: string }>;
+  reactions: Array<{
+    playerId: string;
+    emoji: string;
+    teamIndex: number;
+    segmentIndex: number;
+  }>;
 };
 
 export type RoomState = {

@@ -92,7 +92,7 @@ export function reachVoting(
     if (commands.getPlayerView(priya, roomCode).phase === "voting") {
       return roomCode;
     }
-    advanceTime(4_001);
+    advanceTime(2_501);
     commands.heartbeat(host, roomCode);
   }
   throw new Error("did not reach voting");

@@ -15,7 +15,7 @@ import type { Phase } from "@/lib/game/types";
 export const PHASE_DURATIONS = {
   prompt_reveal: 12_000,
   selecting: 90_000,
-  reveal: 4_000,
+  reveal: 2_500,
   voting: 30_000,
 } as const;
 

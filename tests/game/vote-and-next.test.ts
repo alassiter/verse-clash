@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { createGame, host, openLobby, priya, reachVoting, sam } from "./harness";
+import { createRoomCommands, RoomError } from "@/lib/game";
+import { createGame, host, openLobby, priya, reachVoting, sam, samplePack } from "./harness";
 
 describe("vote and next round", () => {
   it("allows one Crowd Favorite vote per player and increments the winning team when the clock ends", () => {
@@ -33,6 +34,75 @@ describe("vote and next round", () => {
     );
     expect(next.team?.id).toBe(teamId);
     commands.endGame(host, roomCode);
+    expect(commands.getPlayerView(priya, roomCode).phase).toBe("ended");
+  });
+
+  it("lets the host start a new game in the same room after ending", () => {
+    const { commands, advanceTime } = createGame();
+    const roomCode = reachVoting(commands, advanceTime);
+    const goblinId = commands.getPlayerView(priya, roomCode).team!.id;
+    commands.vote(priya, roomCode, goblinId);
+    commands.sendTeamMessage(priya, roomCode, "nice round");
+    advanceTime(30_001);
+    commands.heartbeat(host, roomCode);
+    expect(
+      commands.getPlayerView(priya, roomCode).standings?.find((row) => row.teamId === goblinId)
+        ?.wins,
+    ).toBe(1);
+    commands.endGame(host, roomCode);
+    commands.setReady(priya, roomCode, true);
+
+    commands.restartGame(host, roomCode);
+
+    const gathering = commands.getPlayerView(priya, roomCode);
+    expect(gathering.phase).toBe("gathering");
+    expect(gathering.roomCode).toBe(roomCode);
+    expect(gathering.team).toBeNull();
+    expect(gathering.isReady).toBe(false);
+    expect(gathering.standings).toBeUndefined();
+    expect(gathering.lobby?.players.map((player) => player.displayName)).toEqual([
+      "Alex",
+      "Priya",
+      "Sam",
+      "Lee",
+    ]);
+
+    commands.movePlayer(host, roomCode, priya.id, goblinId);
+    expect(commands.getPlayerView(priya, roomCode).teamChat).toEqual([]);
+
+    commands.startRound(host, roomCode);
+    expect(commands.getPlayerView(priya, roomCode).prompt?.text).toBe(
+      "Announce the company's new strategic vision.",
+    );
+  });
+
+  it("can restart after the command facade is rebuilt over the same rooms", () => {
+    const rooms = new Map();
+    let now = 1_700_000_000_000;
+    const deps = {
+      pack: samplePack(),
+      clock: { now: () => now },
+      random: () => 0.1,
+      roomUrl: (code: string) => `/room/${code}`,
+      rooms,
+    };
+    const first = createRoomCommands(deps);
+    const roomCode = reachVoting(first, (ms) => {
+      now += ms;
+    });
+    first.endGame(host, roomCode);
+
+    const second = createRoomCommands(deps);
+    second.restartGame(host, roomCode);
+    expect(second.getPlayerView(priya, roomCode).phase).toBe("gathering");
+  });
+
+  it("keeps restart as a host-only move after the game has ended", () => {
+    const { commands, advanceTime } = createGame();
+    const roomCode = reachVoting(commands, advanceTime);
+    expect(() => commands.restartGame(host, roomCode)).toThrow(RoomError);
+    commands.endGame(host, roomCode);
+    expect(() => commands.restartGame(priya, roomCode)).toThrow(RoomError);
     expect(commands.getPlayerView(priya, roomCode).phase).toBe("ended");
   });
 

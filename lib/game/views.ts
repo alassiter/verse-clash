@@ -19,7 +19,7 @@ const PHASE_COPY: Record<
   reveal: { name: "Reveal", instruction: "Watch the shared stage" },
   voting: { name: "Voting", instruction: "Pick a Crowd Favorite" },
   standings: { name: "Standings", instruction: "See which team is ahead" },
-  ended: { name: "Ended", instruction: "The game has ended" },
+  ended: { name: "Ended", instruction: "The host can start a new game" },
 };
 
 function teamById(room: RoomState, teamId: string | null) {
@@ -155,10 +155,22 @@ export function playerView(
     view.reveal = {
       teamName,
       composition: shown?.segments ?? [],
-      visibleSegments: visible,
+      visibleSegments: visible.map((segment, segmentIndex) => {
+        if (segment.type === "static") return segment;
+        const myVote = round.reactions.find(
+          (reaction) =>
+            reaction.playerId === player.id &&
+            reaction.teamIndex === round.reveal.teamIndex &&
+            reaction.segmentIndex === segmentIndex,
+        )?.emoji;
+        return {
+          ...segment,
+          segmentIndex,
+          votedEmojis: myVote ? [myVote] : [],
+        };
+      }),
       attribution:
         last?.type === "contribution" ? `Selected by ${last.displayName}` : undefined,
-      bursts: round.reactions.map((reaction) => ({ emoji: reaction.emoji })),
     };
   }
 

@@ -27,22 +27,35 @@ describe("reveal compositions", () => {
     ).toBe(true);
   });
 
-  it("walks one contribution at a time with attribution and allows reveal emoji bursts", () => {
+  it("walks one contribution at a time with attribution and records a word vote", () => {
     const { commands, advanceTime } = createGame();
     const roomCode = playThroughSelection(commands, advanceTime);
     let view = commands.getPlayerView(sam, roomCode);
     expect(view.reveal?.visibleSegments.length).toBe(1);
-    advanceTime(4_001);
+    advanceTime(2_501);
     commands.heartbeat(host, roomCode);
     view = commands.getPlayerView(sam, roomCode);
     const last = view.reveal?.visibleSegments.at(-1);
     if (last?.type === "contribution") {
       expect(view.reveal?.attribution).toBe(`Selected by ${last.displayName}`);
+      commands.sendRevealReaction(priya, roomCode, "😂", last.segmentIndex);
     }
-    commands.sendRevealReaction(priya, roomCode, "😂");
-    const reacted = commands.getPlayerView(sam, roomCode);
-    expect(reacted.reveal?.bursts.map((burst) => burst.emoji)).toContain("😂");
+    const reacted = commands.getPlayerView(priya, roomCode);
+    const voted = reacted.reveal?.visibleSegments.find(
+      (segment) => segment.type === "contribution",
+    );
+    expect(voted?.type === "contribution" && voted.votedEmojis).toEqual(["😂"]);
     expect(reacted.globalChat).toBeUndefined();
+    if (voted?.type === "contribution") {
+      commands.sendRevealReaction(priya, roomCode, "👏", voted.segmentIndex);
+    }
+    const switched = commands.getPlayerView(priya, roomCode);
+    const afterSwitch = switched.reveal?.visibleSegments.find(
+      (segment) => segment.type === "contribution",
+    );
+    expect(afterSwitch?.type === "contribution" && afterSwitch.votedEmojis).toEqual([
+      "👏",
+    ]);
   });
 
   it("auto-advances the reveal cursor after a short timer only once someone heartbeats", () => {
@@ -51,7 +64,7 @@ describe("reveal compositions", () => {
     const first = commands.getPlayerView(sam, roomCode);
     expect(first.phase).toBe("reveal");
     expect(first.reveal?.visibleSegments.length).toBe(1);
-    advanceTime(4_001);
+    advanceTime(2_501);
     expect(commands.getPlayerView(sam, roomCode).reveal?.visibleSegments.length).toBe(
       1,
     );

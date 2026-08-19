@@ -172,9 +172,18 @@ export async function endRoundAction(roomCode: string) {
   }
 }
 
-export async function sendRevealReactionAction(roomCode: string, emoji: string) {
+export async function sendRevealReactionAction(
+  roomCode: string,
+  emoji: string,
+  segmentIndex: number,
+) {
   try {
-    getRoomCommands().sendRevealReaction(await actorFromCookies(), roomCode, emoji);
+    getRoomCommands().sendRevealReaction(
+      await actorFromCookies(),
+      roomCode,
+      emoji,
+      segmentIndex,
+    );
     return { ok: true as const };
   } catch (error) {
     return fail(error);
@@ -202,6 +211,15 @@ export async function startNextRoundAction(roomCode: string) {
 export async function endGameAction(roomCode: string) {
   try {
     getRoomCommands().endGame(await actorFromCookies(), roomCode);
+    return { ok: true as const };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+export async function restartGameAction(roomCode: string) {
+  try {
+    getRoomCommands().restartGame(await actorFromCookies(), roomCode);
     return { ok: true as const };
   } catch (error) {
     return fail(error);
