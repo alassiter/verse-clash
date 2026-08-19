@@ -3,8 +3,8 @@ import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { getAnthropicClient } from "@/lib/ai/client";
 import type { Prompt } from "@/lib/content";
 
-const PROMPT_MODEL = process.env.AI_PROMPT_MODEL ?? "claude-opus-5";
-const CALL_TIMEOUT_MS = 8_000;
+const PROMPT_MODEL = process.env.AI_PROMPT_MODEL ?? "claude-sonnet-5";
+const CALL_TIMEOUT_MS = 20_000;
 
 export const PROMPT_CATEGORIES = [
   "poem",
@@ -94,7 +94,7 @@ export async function generatePromptBatch(input: {
         system: SYSTEM_PROMPT,
         messages: [{ role: "user", content: buildUserPrompt(input) }],
       },
-      { timeout: CALL_TIMEOUT_MS },
+      { timeout: CALL_TIMEOUT_MS, maxRetries: 0 },
     );
     const parsed = response.parsed_output;
     if (!parsed) return [];

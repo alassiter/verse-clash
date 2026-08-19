@@ -29,6 +29,9 @@ export const metadata: Metadata = {
   description: "A remote party game of hidden word choices and workplace-safe chaos.",
 };
 
+/** Compose + judge can take ~40s; Vercel's default (~10s) aborts before Claude returns. */
+export const maxDuration = 60;
+
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html

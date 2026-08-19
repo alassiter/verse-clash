@@ -6,6 +6,7 @@ import {
   playThroughSelection,
   priya,
 } from "./harness";
+import { PHASE_DURATIONS } from "@/lib/game/phase";
 import type { AiComposer, ComposeJudgeResult } from "@/lib/game/types";
 
 function deferred<T>() {
@@ -80,7 +81,7 @@ describe("composing phase", () => {
     const { commands, advanceTime } = createGame({ ai });
     const roomCode = await playThroughSelection(commands, advanceTime);
     expect((await commands.getPlayerView(priya, roomCode)).phase).toBe("composing");
-    advanceTime(20_001);
+    advanceTime(PHASE_DURATIONS.composing + 1);
     await commands.heartbeat(host, roomCode);
     const view = await commands.getPlayerView(priya, roomCode);
     expect(view.phase).toBe("reveal");
@@ -116,6 +117,78 @@ describe("composing phase", () => {
     expect(view.composingWords?.map((word) => word.displayName)).toEqual(
       expect.arrayContaining(["Priya", "Sam"]),
     );
+  });
+
+  it("reveals verses as soon as they compose, without waiting for judging", async () => {
+    let releaseJudge!: () => void;
+    const judgingGate = new Promise<void>((resolve) => {
+      releaseJudge = resolve;
+    });
+    const ai: AiComposer = {
+      async composeAndJudge(input, progress) {
+        const compositions = input.teams.map((team) => ({
+          teamId: team.teamId,
+          segments: [{ type: "static" as const, text: "AI SAYS HELLO" }],
+          source: "ai" as const,
+        }));
+        await progress?.onCompositions?.(compositions);
+        await judgingGate;
+        return {
+          requestId: input.requestId,
+          compositions,
+          judging: [{ teamId: "goblin", promptBonus: 8, cohesionBonus: 7 }],
+        };
+      },
+    };
+    const { commands, advanceTime } = createGame({ ai });
+    const roomCode = await playThroughSelection(commands, advanceTime);
+    const view = await commands.getPlayerView(priya, roomCode);
+    expect(view.phase).toBe("reveal");
+    expect(
+      view.reveal?.composition.some(
+        (segment) => segment.type === "static" && segment.text === "AI SAYS HELLO",
+      ),
+    ).toBe(true);
+
+    releaseJudge();
+    await flushAsync();
+  });
+
+  it("hands compose-and-judge to runInBackground so a serverless request can return without aborting Claude", async () => {
+    const pending = deferred<ComposeJudgeResult>();
+    const scheduled: Promise<unknown>[] = [];
+    const ai: AiComposer = {
+      composeAndJudge: () => pending.promise,
+    };
+    const { commands, advanceTime } = createGame({
+      ai,
+      runInBackground: (work) => {
+        scheduled.push(work);
+      },
+    });
+    const roomCode = await playThroughSelection(commands, advanceTime);
+    expect((await commands.getPlayerView(priya, roomCode)).phase).toBe("composing");
+    expect(scheduled).toHaveLength(1);
+
+    pending.resolve({
+      requestId: "req-kept-alive",
+      compositions: [
+        {
+          teamId: "goblin",
+          segments: [{ type: "static", text: "AI SAYS HELLO" }],
+          source: "ai",
+        },
+      ],
+    });
+    await scheduled[0];
+
+    const view = await commands.getPlayerView(priya, roomCode);
+    expect(view.phase).toBe("reveal");
+    expect(
+      view.reveal?.composition.some(
+        (segment) => segment.type === "static" && segment.text === "AI SAYS HELLO",
+      ),
+    ).toBe(true);
   });
 
   it("discards a stale AI resolution that arrives after the host force-ends the round", async () => {

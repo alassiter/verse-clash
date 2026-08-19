@@ -18,6 +18,7 @@ import {
   type RoundState,
 } from "@/lib/game/state";
 import type {
+  AiComposer,
   ComposeJudgeInput,
   ComposeJudgeResult,
   Phase,
@@ -31,7 +32,7 @@ const MAX_ROUNDS = 3;
 export const PHASE_DURATIONS = {
   prompt_reveal: 12_000,
   selecting: 90_000,
-  composing: 20_000,
+  composing: 25_000,
   reveal: 4_000,
   voting: 15_000,
 } as const;
@@ -114,10 +115,11 @@ function dealRemainingHands(
 }
 
 export type AiHooks = {
-  composeAndJudge(input: ComposeJudgeInput): Promise<ComposeJudgeResult>;
+  composeAndJudge: AiComposer["composeAndJudge"];
   getRoom(roomId: string): RoomState | undefined;
   persistRoom(roomId: string): Promise<void>;
   now(): number;
+  runInBackground(work: Promise<unknown>): void;
 };
 
 export type PhaseContext = {
@@ -469,33 +471,46 @@ function beginComposing(room: RoomState, round: RoundState, ctx: PhaseContext) {
   const promptId = round.promptId;
   const random = ctx.random;
 
-  ai
-    .composeAndJudge({
-      roomId,
-      roomCode,
-      roundId,
-      roundNumber,
-      requestId,
-      templateId,
-      promptId,
-      teams: teamsFills,
-    })
-    .then(async (result) => {
-      applyComposition(ai, pack, roomId, roundId, requestId, teamsFills, result);
-      await ai.persistRoom(roomId);
-    })
-    .catch(async () => {
-      applyComposition(ai, pack, roomId, roundId, requestId, teamsFills, {
-        requestId,
-        compositions: flavorCompositions(pack, teamsFills, random, {
+  ai.runInBackground(
+    ai
+      .composeAndJudge(
+        {
+          roomId,
           roomCode,
+          roundId,
           roundNumber,
-          origin: "call-failed",
-          reason: "compose rejected",
-        }),
-      });
-      await ai.persistRoom(roomId);
-    });
+          requestId,
+          templateId,
+          promptId,
+          teams: teamsFills,
+        },
+        {
+          onCompositions: (compositions) => {
+            applyComposition(ai, pack, roomId, roundId, requestId, teamsFills, {
+              requestId,
+              compositions,
+            });
+            void Promise.resolve().then(() => ai.persistRoom(roomId));
+          },
+        },
+      )
+      .then(async (result) => {
+        applyComposition(ai, pack, roomId, roundId, requestId, teamsFills, result);
+        await ai.persistRoom(roomId);
+      })
+      .catch(async () => {
+        applyComposition(ai, pack, roomId, roundId, requestId, teamsFills, {
+          requestId,
+          compositions: flavorCompositions(pack, teamsFills, random, {
+            roomCode,
+            roundNumber,
+            origin: "call-failed",
+            reason: "compose rejected",
+          }),
+        });
+        await ai.persistRoom(roomId);
+      }),
+  );
 }
 
 function applyComposition(
@@ -511,17 +526,29 @@ function applyComposition(
   if (!room) return;
   const round = room.rounds.find((entry) => entry.id === roundId);
   if (!round) return;
-  if (round.phase !== "composing" || round.pendingComposition?.requestId !== requestId) {
+  const pending = round.pendingComposition;
+  if (!pending || pending.requestId !== requestId) return;
+
+  if (round.phase === "composing") {
+    round.compositions = result.compositions;
+    round.judging = result.judging ?? null;
+    round.scoring = scoreRound(pack, teamsFills, round.judging);
+    pending.status = "resolved";
+    round.reveal = { teamIndex: 0, segmentIndex: 0 };
+    round.phase = "reveal";
+    round.phaseEndsAt = ai.now() + PHASE_DURATIONS.reveal;
+    room.status = "lobby";
     return;
   }
-  round.compositions = result.compositions;
-  round.judging = result.judging ?? null;
-  round.scoring = scoreRound(pack, teamsFills, round.judging);
-  round.pendingComposition.status = "resolved";
-  round.reveal = { teamIndex: 0, segmentIndex: 0 };
-  round.phase = "reveal";
-  round.phaseEndsAt = ai.now() + PHASE_DURATIONS.reveal;
-  room.status = "lobby";
+
+  if (
+    result.judging &&
+    pending.status === "resolved" &&
+    (round.phase === "reveal" || round.phase === "voting")
+  ) {
+    round.judging = result.judging;
+    round.scoring = scoreRound(pack, teamsFills, round.judging);
+  }
 }
 
 function forceFallbackComposition(room: RoomState, round: RoundState, ctx: PhaseContext) {

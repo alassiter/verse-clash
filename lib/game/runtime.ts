@@ -1,3 +1,4 @@
+import { after } from "next/server";
 import { loadContentPack, validatePromptCandidate, type ContentPack } from "@/lib/content";
 import { createAnthropicComposer } from "@/lib/ai/composer";
 import { generatePromptBatch, PROMPT_CATEGORIES } from "@/lib/ai/promptGenerator";
@@ -86,6 +87,11 @@ export function getRoomCommands(): RoomCommands {
       store: getStore(),
       ai: createAnthropicComposer(loaded.pack),
       onHeartbeat: createPromptPoolRefresher(loaded.pack),
+      runInBackground: (work) => {
+        after(async () => {
+          await work;
+        });
+      },
     });
   }
   return globalForGame.__verseClashCommands;

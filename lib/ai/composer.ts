@@ -16,9 +16,10 @@ import type {
   JudgeScore,
 } from "@/lib/game/types";
 
-const COMPOSER_MODEL = process.env.AI_COMPOSER_MODEL ?? "claude-opus-5";
-const JUDGE_MODEL = process.env.AI_JUDGE_MODEL ?? "claude-opus-5";
-const CALL_TIMEOUT_MS = 8_000;
+const COMPOSER_MODEL = process.env.AI_COMPOSER_MODEL ?? "claude-sonnet-5";
+const JUDGE_MODEL = process.env.AI_JUDGE_MODEL ?? "claude-sonnet-5";
+const CALL_TIMEOUT_MS = 20_000;
+const CALL_RETRIES = 0;
 
 const WordUsageSchema = z.object({
   slotId: z.string(),
@@ -177,7 +178,7 @@ async function composeTeam(
         system: COMPOSER_SYSTEM_PROMPT,
         messages: [{ role: "user", content: buildComposePrompt(pack, input, team) }],
       },
-      { timeout: CALL_TIMEOUT_MS },
+      { timeout: CALL_TIMEOUT_MS, maxRetries: CALL_RETRIES },
     );
     const candidate = response.parsed_output;
     if (!candidate) {
@@ -227,7 +228,7 @@ async function judgeVerses(
         output_config: { effort: "low", format: zodOutputFormat(JudgeResponseSchema) },
         messages: [{ role: "user", content: userContent }],
       },
-      { timeout: CALL_TIMEOUT_MS },
+      { timeout: CALL_TIMEOUT_MS, maxRetries: CALL_RETRIES },
     );
     return response.parsed_output?.scores ?? undefined;
   } catch (err) {
@@ -243,11 +244,15 @@ export function createAnthropicComposer(
   random: () => number = Math.random,
 ): AiComposer {
   return {
-    async composeAndJudge(input: ComposeJudgeInput): Promise<ComposeJudgeResult> {
+    async composeAndJudge(input, progress): Promise<ComposeJudgeResult> {
       const client = getAnthropicClient();
+      console.info(
+        `[verse-compose] room=${input.roomCode} round=${input.roundNumber} client=${client ? "anthropic" : "none"} teams=${input.teams.length}`,
+      );
       const compositions = client
         ? await Promise.all(input.teams.map((team) => composeTeam(client, pack, input, team, random)))
         : input.teams.map((team) => logAndFallback(pack, input, team, random, "skipped-no-key"));
+      await progress?.onCompositions?.(compositions);
       const judging = client
         ? await judgeVerses(client, pack, input, compositions)
         : undefined;

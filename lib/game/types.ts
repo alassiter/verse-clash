@@ -41,7 +41,14 @@ export type ComposeJudgeResult = {
 };
 
 export type AiComposer = {
-  composeAndJudge(input: ComposeJudgeInput): Promise<ComposeJudgeResult>;
+  composeAndJudge(
+    input: ComposeJudgeInput,
+    progress?: {
+      onCompositions?: (
+        compositions: ComposeJudgeResult["compositions"],
+      ) => void | Promise<void>;
+    },
+  ): Promise<ComposeJudgeResult>;
 };
 
 export type TeammateView = {
@@ -205,4 +212,7 @@ export type RoomCommandDeps = {
   /** Fire-and-forget hook piggybacked on the client heartbeat poll — used to
    * periodically refresh the AI-generated prompt pool without a scheduler. */
   onHeartbeat?: () => void;
+  /** Keep a promise alive after the HTTP response. On Vercel this must use
+   * `after()`; a detached `void promise` is frozen when the isolate sleeps. */
+  runInBackground?: (work: Promise<unknown>) => void;
 };

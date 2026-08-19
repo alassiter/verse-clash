@@ -17,6 +17,7 @@ export function createGame(options?: {
   random?: () => number;
   store?: RoomStore;
   ai?: AiComposer;
+  runInBackground?: (work: Promise<unknown>) => void;
 }): {
   commands: RoomCommands;
   advanceTime: (ms: number) => void;
@@ -30,7 +31,8 @@ export function createGame(options?: {
     random: options?.random ?? (() => 0.1),
     roomUrl: (code) => `/room/${code}`,
     store: options?.store ?? createInMemoryRoomStore(),
-  ai: options?.ai,
+    ai: options?.ai,
+    runInBackground: options?.runInBackground,
   });
   return {
     commands,

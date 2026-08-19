@@ -91,6 +91,9 @@ export function createRoomCommands(deps: RoomCommandDeps): RoomCommands {
   const roomVersions = new Map<string, number>();
 
   const composeAndJudge = deps.ai?.composeAndJudge ?? defaultComposeAndJudge(pack, deps.random);
+  const runInBackground = deps.runInBackground ?? ((work) => {
+    void work;
+  });
   const ai: AiHooks = {
     composeAndJudge,
     getRoom: (roomId: string) => rooms.get(roomId),
@@ -108,6 +111,7 @@ export function createRoomCommands(deps: RoomCommandDeps): RoomCommands {
       }
     },
     now,
+    runInBackground,
   };
 
   const ctxFor = (at: number): PhaseContext => ({
@@ -127,9 +131,9 @@ export function createRoomCommands(deps: RoomCommandDeps): RoomCommands {
       if (!found) {
         throw new RoomError("not_found", "No room uses that code.");
       }
-      const result = mutate(found.state);
       rooms.set(code, found.state);
       roomVersions.set(code, found.version);
+      const result = mutate(found.state);
       if (await store.save(code, found.state, found.version)) {
         roomVersions.set(code, found.version + 1);
         return result;
