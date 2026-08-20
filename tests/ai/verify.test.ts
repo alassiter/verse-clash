@@ -27,7 +27,7 @@ describe("verifyComposition", () => {
   const twoFills = [fill(), fill({ slotId: "principle-noun", playerId: "p2", text: "seagull" })];
   const twoUsages = [usage(), usage({ slotId: "principle-noun", playerId: "p2", originalText: "seagull", renderedText: "seagull" })];
 
-  it("accepts an exact, present, ratio-satisfying render", () => {
+  it("accepts an exact, present render", () => {
     const result = verifyComposition(twoFills, twoUsages, "Soggy seagull arrived.");
     expect(result).toEqual({ ok: true });
   });
@@ -78,16 +78,20 @@ describe("verifyComposition", () => {
     expect(result.ok).toBe(false);
   });
 
-  it("rejects when the player-word ratio falls below the floor", () => {
+  it("does not reject when the player-word ratio is below a 60% aim", () => {
     const longFiller =
       "a great many additional connective words padding out this verse well beyond a reasonable glue-word share";
     const result = verifyComposition(
       [fill()],
       [usage()],
       `${longFiller} soggy ${longFiller}`,
-      0.6,
     );
-    expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.reason).toContain("ratio");
+    expect(result).toEqual({ ok: true });
+  });
+
+  it("does not reject a long verse on word count", () => {
+    const padding = Array.from({ length: 80 }, () => "extra").join(" ");
+    const result = verifyComposition([fill()], [usage()], `${padding} soggy`);
+    expect(result).toEqual({ ok: true });
   });
 });

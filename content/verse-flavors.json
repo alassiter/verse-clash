@@ -1,0 +1,102 @@
+[
+  {
+    "id": "memo",
+    "open": "Memo: ",
+    "after": {
+      "adjective": " ",
+      "noun": " regarding ",
+      "noun_phrase": " — please ",
+      "verb": ". "
+    }
+  },
+  {
+    "id": "toast",
+    "open": "A toast to the ",
+    "after": {
+      "adjective": " ",
+      "noun": " of ",
+      "noun_phrase": ": may we ",
+      "verb": ". "
+    }
+  },
+  {
+    "id": "warning",
+    "open": "Warning: a ",
+    "after": {
+      "adjective": " ",
+      "noun": " involving ",
+      "noun_phrase": " may ",
+      "verb": ". "
+    }
+  },
+  {
+    "id": "news",
+    "open": "This just in: ",
+    "after": {
+      "adjective": " ",
+      "noun": " meets ",
+      "noun_phrase": " and they ",
+      "verb": ". "
+    }
+  },
+  {
+    "id": "recipe",
+    "open": "Ingredients: ",
+    "after": {
+      "adjective": " ",
+      "noun": " with ",
+      "noun_phrase": ". Method: ",
+      "verb": ". "
+    }
+  },
+  {
+    "id": "prophecy",
+    "open": "It is written that ",
+    "after": {
+      "adjective": " ",
+      "noun": " shall bring ",
+      "noun_phrase": " and ",
+      "verb": ". "
+    }
+  },
+  {
+    "id": "report",
+    "open": "Field report: ",
+    "after": {
+      "adjective": " ",
+      "noun": " observed near ",
+      "noun_phrase": "; recommend we ",
+      "verb": ". "
+    }
+  },
+  {
+    "id": "ode",
+    "open": "O ",
+    "after": {
+      "adjective": " ",
+      "noun": ", you of ",
+      "noun_phrase": ", you ",
+      "verb": ". "
+    }
+  },
+  {
+    "id": "manual",
+    "open": "Step one: apply ",
+    "after": {
+      "adjective": " ",
+      "noun": " to ",
+      "noun_phrase": ", then ",
+      "verb": ". "
+    }
+  },
+  {
+    "id": "postcard",
+    "open": "Wish you were here among the ",
+    "after": {
+      "adjective": " ",
+      "noun": " and ",
+      "noun_phrase": ". We ",
+      "verb": ". "
+    }
+  }
+]

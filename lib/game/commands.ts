@@ -1,6 +1,7 @@
-import { assembleComposition } from "@/lib/content";
+import { cyclingFallback } from "@/lib/content";
 import {
   current,
+  dealNextHandForPlayer,
   enter,
   leave,
   pickNextPrompt,
@@ -27,15 +28,13 @@ import { hostView, playerView } from "@/lib/game/views";
 
 function defaultComposeAndJudge(
   pack: RoomCommandDeps["pack"],
+  random: () => number,
 ): AiComposer["composeAndJudge"] {
   return async (input: ComposeJudgeInput): Promise<ComposeJudgeResult> => ({
     requestId: input.requestId,
     compositions: input.teams.map((team) => ({
       teamId: team.teamId,
-      segments: assembleComposition(pack, {
-        templateId: input.templateId,
-        fills: team.fills,
-      }).segments,
+      segments: cyclingFallback(pack, team.fills, random),
       source: "deterministic_fallback" as const,
     })),
   });
@@ -52,6 +51,8 @@ export class RoomError extends Error {
 }
 
 const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+const SAVE_RETRY_ATTEMPTS = 5;
+const CREATE_ROOM_ATTEMPTS = 50;
 
 function makeCode(random: () => number): string {
   let code = "";
@@ -59,14 +60,6 @@ function makeCode(random: () => number): string {
     code += CODE_ALPHABET[Math.floor(random() * CODE_ALPHABET.length) % CODE_ALPHABET.length];
   }
   return code;
-}
-
-function requireRoom(rooms: Map<string, RoomState>, roomCode: string): RoomState {
-  const room = rooms.get(roomCode.toUpperCase());
-  if (!room) {
-    throw new RoomError("not_found", "No room uses that code.");
-  }
-  return room;
 }
 
 function requirePlayer(room: RoomState, actor: Actor): PlayerState {
@@ -90,15 +83,30 @@ function touch(player: PlayerState, now: number) {
 }
 
 export function createRoomCommands(deps: RoomCommandDeps): RoomCommands {
-  const rooms = new Map<string, RoomState>();
+  const store = deps.store;
   const pack = deps.pack;
   const now = () => deps.clock.now();
   let codeSerial = 0;
+  const rooms = new Map<string, RoomState>();
+  const roomVersions = new Map<string, number>();
 
-  const composeAndJudge = deps.ai?.composeAndJudge ?? defaultComposeAndJudge(pack);
+  const composeAndJudge = deps.ai?.composeAndJudge ?? defaultComposeAndJudge(pack, deps.random);
   const ai: AiHooks = {
     composeAndJudge,
     getRoom: (roomId: string) => rooms.get(roomId),
+    persistRoom: async (roomId: string) => {
+      const room = rooms.get(roomId);
+      const version = roomVersions.get(roomId);
+      if (!room || version === undefined) return;
+      if (await store.save(room.code, room, version)) {
+        roomVersions.set(roomId, version + 1);
+        return;
+      }
+      const latest = await store.load(room.code);
+      if (latest && (await store.save(room.code, room, latest.version))) {
+        roomVersions.set(roomId, latest.version + 1);
+      }
+    },
     now,
   };
 
@@ -109,237 +117,349 @@ export function createRoomCommands(deps: RoomCommandDeps): RoomCommands {
     ai,
   });
 
-  const roomAfterTick = (roomCode: string): RoomState => {
-    const room = requireRoom(rooms, roomCode);
-    tick(room, ctxFor(now()));
-    return room;
-  };
+  // Loads the room, runs `mutate` against the in-memory object, and saves
+  // it back with optimistic concurrency: if another request saved a change
+  // to this room in between, reload and rerun `mutate` from scratch.
+  async function withRoom<T>(roomCode: string, mutate: (room: RoomState) => T): Promise<T> {
+    const code = roomCode.toUpperCase();
+    for (let attempt = 0; attempt < SAVE_RETRY_ATTEMPTS; attempt += 1) {
+      const found = await store.load(code);
+      if (!found) {
+        throw new RoomError("not_found", "No room uses that code.");
+      }
+      const result = mutate(found.state);
+      rooms.set(code, found.state);
+      roomVersions.set(code, found.version);
+      if (await store.save(code, found.state, found.version)) {
+        roomVersions.set(code, found.version + 1);
+        return result;
+      }
+    }
+    throw new RoomError(
+      "conflict",
+      "That action couldn't be saved because the room changed at the same time. Try again.",
+    );
+  }
+
+  async function readRoom<T>(roomCode: string, read: (room: RoomState) => T): Promise<T> {
+    const found = await store.load(roomCode.toUpperCase());
+    if (!found) {
+      throw new RoomError("not_found", "No room uses that code.");
+    }
+    return read(found.state);
+  }
 
   const commands: RoomCommands = {
-    createRoom(actor, input) {
-      codeSerial += 1;
-      let code = makeCode(() => (deps.random() + codeSerial * 0.17) % 1).toUpperCase();
-      while (rooms.has(code)) {
-        codeSerial += 1;
-        code = makeCode(() => (deps.random() + codeSerial * 0.17) % 1).toUpperCase();
-      }
+    async createRoom(actor, input) {
       const createdAt = now();
-      const room: RoomState = {
-        id: code,
-        code,
-        hostId: actor.id,
-        status: "lobby",
-        paused: false,
-        pauseStartedAt: null,
-        contentMode: "work_safe",
-        nextPromptId: pickNextPrompt(pack, deps.random, null).id,
-        teams: TEAM_SEEDS.map((seed) => ({ ...seed, totalScore: 0, roundsWon: 0 })),
-        players: [
-          {
-            id: actor.id,
-            displayName: input.displayName,
-            teamId: null,
-            isHost: true,
-            isReady: false,
-            lastSeenAt: createdAt,
-            joinedRound: 0,
+      for (let attempt = 0; attempt < CREATE_ROOM_ATTEMPTS; attempt += 1) {
+        codeSerial += 1;
+        const code = makeCode(() => (deps.random() + codeSerial * 0.17) % 1).toUpperCase();
+        const room: RoomState = {
+          id: code,
+          code,
+          hostId: actor.id,
+          status: "lobby",
+          paused: false,
+          pauseStartedAt: null,
+          contentMode: "work_safe",
+          nextPromptId: pickNextPrompt(pack, deps.random, null).id,
+          teams: TEAM_SEEDS.map((seed) => ({ ...seed, totalScore: 0, roundsWon: 0 })),
+          players: [
+            {
+              id: actor.id,
+              displayName: input.displayName,
+              teamId: null,
+              isHost: true,
+              isReady: false,
+              lastSeenAt: createdAt,
+              joinedRound: 0,
           },
         ],
-        rounds: [],
-      };
-      rooms.set(code, room);
-      return { roomCode: code, url: deps.roomUrl(code) };
+          rounds: [],
+          teamMessages: [],
+        };
+        if (await store.insert(room)) {
+          rooms.set(code, room);
+          roomVersions.set(code, 0);
+          return { roomCode: code, url: deps.roomUrl(code) };
+        }
+      }
+      throw new RoomError("code_exhausted", "Could not allocate a room code. Try again.");
     },
 
-    joinRoom(actor, input) {
-      const room = roomAfterTick(input.code);
-      const existing = room.players.find((player) => player.id === actor.id);
-      if (existing) {
-        touch(existing, now());
-        return;
-      }
-      const round = currentRound(room);
-      const joinedRound =
-        round && current(room) !== "gathering" && current(room) !== "ended"
-          ? round.number + 1
-          : 0;
-      room.players.push({
-        id: actor.id,
-        displayName: input.displayName,
-        teamId: null,
-        isHost: false,
-        isReady: false,
-        lastSeenAt: now(),
-        joinedRound,
+    async joinRoom(actor, input) {
+      await withRoom(input.code, (room) => {
+        tick(room, ctxFor(now()));
+        const existing = room.players.find((player) => player.id === actor.id);
+        if (existing) {
+          touch(existing, now());
+          return;
+        }
+        const round = currentRound(room);
+        const joinedRound =
+          round && current(room) !== "gathering" && current(room) !== "ended"
+            ? round.number + 1
+            : 0;
+        room.players.push({
+          id: actor.id,
+          displayName: input.displayName,
+          teamId: null,
+          isHost: false,
+          isReady: false,
+          lastSeenAt: now(),
+          joinedRound,
+        });
       });
     },
 
-    getPlayerView(actor, roomCode) {
-      const room = requireRoom(rooms, roomCode);
-      return playerView(room, requirePlayer(room, actor), pack);
+    async getPlayerView(actor, roomCode) {
+      return readRoom(roomCode, (room) => playerView(room, requirePlayer(room, actor), pack));
     },
 
-    getHostView(actor, roomCode) {
-      const room = requireRoom(rooms, roomCode);
-      return hostView(room, requireHost(room, actor), pack, now());
+    async getHostView(actor, roomCode) {
+      return readRoom(roomCode, (room) => hostView(room, requireHost(room, actor), pack, now()));
     },
 
-    heartbeat(actor, roomCode) {
-      const room = roomAfterTick(roomCode);
-      touch(requirePlayer(room, actor), now());
-      deps.onHeartbeat?.();
-    },
-
-    setReady(actor, roomCode, ready) {
-      const room = roomAfterTick(roomCode);
-      const player = requirePlayer(room, actor);
-      player.isReady = ready;
-      touch(player, now());
-    },
-
-    shuffleTeams(actor, roomCode) {
-      const room = roomAfterTick(roomCode);
-      requireHost(room, actor);
-      const seated = room.players.filter((player) => player.teamId && !player.isHost);
-      for (let i = seated.length - 1; i > 0; i -= 1) {
-        const j = Math.floor(deps.random() * (i + 1));
-        [seated[i], seated[j]] = [seated[j], seated[i]];
-      }
-      seated.forEach((player, index) => {
-        player.teamId = room.teams[index % room.teams.length].id;
+    async heartbeat(actor, roomCode) {
+      await withRoom(roomCode, (room) => {
+        tick(room, ctxFor(now()));
+        touch(requirePlayer(room, actor), now());
       });
     },
 
-    movePlayer(actor, roomCode, playerId, teamId) {
-      const room = roomAfterTick(roomCode);
-      requireHost(room, actor);
-      const player = room.players.find((entry) => entry.id === playerId);
-      if (!player) {
-        throw new RoomError("not_in_room", "That player is not in this room.");
-      }
-      if (player.isHost && teamId) {
-        throw new RoomError("host_cannot_play", "The host cannot join a team.");
-      }
-      if (teamId && !room.teams.some((team) => team.id === teamId)) {
-        throw new RoomError("bad_team", "Unknown team.");
-      }
-      player.teamId = teamId;
+    async setReady(actor, roomCode, ready) {
+      await withRoom(roomCode, (room) => {
+        tick(room, ctxFor(now()));
+        const player = requirePlayer(room, actor);
+        player.isReady = ready;
+        touch(player, now());
+      });
     },
 
-    startRound(actor, roomCode) {
-      const room = roomAfterTick(roomCode);
-      requireHost(room, actor);
-      if (current(room) !== "gathering") {
-        throw new RoomError("wrong_phase", "Start the next round from standings.");
-      }
-      leave(room, ctxFor(now()));
+    async shuffleTeams(actor, roomCode) {
+      await withRoom(roomCode, (room) => {
+        tick(room, ctxFor(now()));
+        requireHost(room, actor);
+        const seated = room.players.filter((player) => player.teamId && !player.isHost);
+        for (let i = seated.length - 1; i > 0; i -= 1) {
+          const j = Math.floor(deps.random() * (i + 1));
+          [seated[i], seated[j]] = [seated[j], seated[i]];
+        }
+        seated.forEach((player, index) => {
+          player.teamId = room.teams[index % room.teams.length].id;
+        });
+      });
     },
 
-    submitChoice(actor, roomCode, optionId) {
-      const room = roomAfterTick(roomCode);
-      const player = requirePlayer(room, actor);
-      const round = currentRound(room);
-      if (!round || current(room) !== "selecting") {
-        throw new RoomError("wrong_phase", "Selection is not open.");
-      }
-      const assignment = round.assignments.find(
-        (entry) => entry.playerId === player.id && !entry.submittedAt,
-      );
-      if (!assignment) {
-        const hasAnyAssignment = round.assignments.some((entry) => entry.playerId === player.id);
-        if (hasAnyAssignment) return;
-        throw new RoomError("no_assignment", "Wait for the next round.");
-      }
-      if (!assignment.options.some((option) => option.id === optionId)) {
-        throw new RoomError("bad_option", "That option was not dealt to you.");
-      }
-      assignment.selectedOptionId = optionId;
-      assignment.submittedAt = now();
-      touch(player, now());
-      if (
-        round.assignments.length > 0 &&
-        round.assignments.every((entry) => entry.submittedAt)
-      ) {
+    async movePlayer(actor, roomCode, playerId, teamId) {
+      await withRoom(roomCode, (room) => {
+        tick(room, ctxFor(now()));
+        requireHost(room, actor);
+        const player = room.players.find((entry) => entry.id === playerId);
+        if (!player) {
+          throw new RoomError("not_in_room", "That player is not in this room.");
+        }
+        if (player.isHost && teamId) {
+          throw new RoomError("host_cannot_play", "The host cannot join a team.");
+        }
+        if (teamId && !room.teams.some((team) => team.id === teamId)) {
+          throw new RoomError("bad_team", "Unknown team.");
+        }
+        player.teamId = teamId;
+      });
+    },
+
+    async startRound(actor, roomCode) {
+      await withRoom(roomCode, (room) => {
+        tick(room, ctxFor(now()));
+        requireHost(room, actor);
+        if (current(room) !== "gathering") {
+          throw new RoomError("wrong_phase", "Start the next round from standings.");
+        }
         leave(room, ctxFor(now()));
-      }
+      });
     },
 
-    pause(actor, roomCode) {
-      const room = roomAfterTick(roomCode);
-      requireHost(room, actor);
-      if (room.paused) return;
-      room.paused = true;
-      room.pauseStartedAt = now();
+    async submitChoice(actor, roomCode, optionId) {
+      await withRoom(roomCode, (room) => {
+        tick(room, ctxFor(now()));
+        const player = requirePlayer(room, actor);
+        const round = currentRound(room);
+        if (!round || current(room) !== "selecting") {
+          throw new RoomError("wrong_phase", "Selection is not open.");
+        }
+        const assignment = round.assignments.find(
+          (entry) => entry.playerId === player.id && !entry.submittedAt,
+        );
+        if (!assignment) {
+          if (round.assignments.some((entry) => entry.playerId === player.id)) return;
+          throw new RoomError("no_assignment", "Wait for the next round.");
+        }
+        if (!assignment.options.some((option) => option.id === optionId)) {
+          throw new RoomError("bad_option", "That option was not dealt to you.");
+        }
+        assignment.selectedOptionId = optionId;
+        assignment.submittedAt = now();
+        touch(player, now());
+        dealNextHandForPlayer(pack, room, round, player.id, deps.random);
+        if (
+          round.assignments.length > 0 &&
+          round.assignments.every((entry) => entry.submittedAt)
+        ) {
+          leave(room, ctxFor(now()));
+        }
+      });
     },
 
-    resume(actor, roomCode) {
-      const room = roomAfterTick(roomCode);
-      requireHost(room, actor);
-      if (!room.paused) return;
-      const round = currentRound(room);
-      const pausedFor = now() - (room.pauseStartedAt ?? now());
-      if (round?.phaseEndsAt) {
-        round.phaseEndsAt += pausedFor;
-      }
-      room.paused = false;
-      room.pauseStartedAt = null;
+    async sendTeamMessage(actor, roomCode, body) {
+      await withRoom(roomCode, (room) => {
+        tick(room, ctxFor(now()));
+        const player = requirePlayer(room, actor);
+        if (!player.teamId) throw new RoomError("no_team", "Join a team to chat.");
+        room.teamMessages.push({ teamId: player.teamId, playerId: player.id, body });
+      });
     },
 
-    endRound(actor, roomCode) {
-      const room = roomAfterTick(roomCode);
-      requireHost(room, actor);
-      const phase = current(room);
-      if (phase === "gathering" || phase === "standings" || phase === "ended") {
-        throw new RoomError("wrong_phase", "There is no round to end.");
-      }
-      enter(room, ctxFor(now()), "standings");
+    async sendTeamEmoji(actor, roomCode, emoji) {
+      await commands.sendTeamMessage(actor, roomCode, emoji);
     },
 
-    sendRevealReaction(actor, roomCode, emoji) {
-      const room = roomAfterTick(roomCode);
-      const player = requirePlayer(room, actor);
-      if (current(room) !== "reveal") {
-        throw new RoomError("wrong_phase", "Reactions are for the reveal.");
-      }
-      const round = currentRound(room);
-      if (!round) {
-        throw new RoomError("wrong_phase", "Reactions are for the reveal.");
-      }
-      if (!REVEAL_EMOJIS.includes(emoji as (typeof REVEAL_EMOJIS)[number])) {
-        throw new RoomError("bad_emoji", "Use one of 😂 👏 🤯 ❤️ 😮");
-      }
-      round.reactions.push({ playerId: player.id, emoji });
+        async pause(actor, roomCode) {
+      await withRoom(roomCode, (room) => {
+        tick(room, ctxFor(now()));
+        requireHost(room, actor);
+        if (room.paused) return;
+        room.paused = true;
+        room.pauseStartedAt = now();
+      });
     },
 
-    vote(actor, roomCode, teamId) {
-      const room = roomAfterTick(roomCode);
-      const player = requirePlayer(room, actor);
-      const round = currentRound(room);
-      if (!round || current(room) !== "voting") {
-        throw new RoomError("wrong_phase", "Voting is not open.");
-      }
-      if (!room.teams.some((team) => team.id === teamId)) {
-        throw new RoomError("bad_team", "Unknown team.");
-      }
-      if (round.votes.some((entry) => entry.playerId === player.id)) {
-        return;
-      }
-      round.votes.push({ playerId: player.id, teamId });
+    async resume(actor, roomCode) {
+      await withRoom(roomCode, (room) => {
+        tick(room, ctxFor(now()));
+        requireHost(room, actor);
+        if (!room.paused) return;
+        const round = currentRound(room);
+        const pausedFor = now() - (room.pauseStartedAt ?? now());
+        if (round?.phaseEndsAt) {
+          round.phaseEndsAt += pausedFor;
+        }
+        room.paused = false;
+        room.pauseStartedAt = null;
+      });
     },
 
-    startNextRound(actor, roomCode) {
-      const room = roomAfterTick(roomCode);
-      requireHost(room, actor);
-      if (current(room) !== "standings") {
-        throw new RoomError("wrong_phase", "Finish the current round first.");
-      }
-      leave(room, ctxFor(now()));
+    async endRound(actor, roomCode) {
+      await withRoom(roomCode, (room) => {
+        tick(room, ctxFor(now()));
+        requireHost(room, actor);
+        const phase = current(room);
+        if (phase === "gathering" || phase === "standings" || phase === "ended") {
+          throw new RoomError("wrong_phase", "There is no round to end.");
+        }
+        enter(room, ctxFor(now()), "standings");
+      });
     },
 
-    endGame(actor, roomCode) {
-      const room = roomAfterTick(roomCode);
-      requireHost(room, actor);
-      enter(room, ctxFor(now()), "ended");
+    async sendRevealReaction(actor, roomCode, emoji, segmentIndex) {
+      await withRoom(roomCode, (room) => {
+        tick(room, ctxFor(now()));
+        const player = requirePlayer(room, actor);
+        if (current(room) !== "reveal") {
+          throw new RoomError("wrong_phase", "Reactions are for the reveal.");
+        }
+        const round = currentRound(room);
+        if (!round) {
+          throw new RoomError("wrong_phase", "Reactions are for the reveal.");
+        }
+        if (!REVEAL_EMOJIS.includes(emoji as (typeof REVEAL_EMOJIS)[number])) {
+          throw new RoomError("bad_emoji", "Use one of 😂 👏 🤯 ❤️ 😮");
+        }
+        const shown = round.compositions[round.reveal.teamIndex];
+        const targetIndex = segmentIndex ?? round.reveal.segmentIndex;
+        const segment = shown?.segments[targetIndex];
+        if (
+          !segment ||
+          segment.type !== "contribution" ||
+          targetIndex > round.reveal.segmentIndex
+        ) {
+          throw new RoomError("bad_segment", "That word is not on stage yet.");
+        }
+        round.reactions = round.reactions.filter(
+          (entry) =>
+            !(
+              entry.playerId === player.id &&
+              entry.teamIndex === round.reveal.teamIndex &&
+              entry.segmentIndex === targetIndex
+            ),
+        );
+        round.reactions.push({
+          playerId: player.id,
+          emoji,
+          teamIndex: round.reveal.teamIndex,
+          segmentIndex: targetIndex,
+        });
+      });
+    },
+
+    async vote(actor, roomCode, teamId) {
+      await withRoom(roomCode, (room) => {
+        tick(room, ctxFor(now()));
+        const player = requirePlayer(room, actor);
+        const round = currentRound(room);
+        if (!round || current(room) !== "voting") {
+          throw new RoomError("wrong_phase", "Voting is not open.");
+        }
+        if (!room.teams.some((team) => team.id === teamId)) {
+          throw new RoomError("bad_team", "Unknown team.");
+        }
+        if (round.votes.some((entry) => entry.playerId === player.id)) {
+          return;
+        }
+        round.votes.push({ playerId: player.id, teamId });
+      });
+    },
+
+    async startNextRound(actor, roomCode) {
+      await withRoom(roomCode, (room) => {
+        tick(room, ctxFor(now()));
+        requireHost(room, actor);
+        if (current(room) !== "standings") {
+          throw new RoomError("wrong_phase", "Finish the current round first.");
+        }
+        leave(room, ctxFor(now()));
+      });
+    },
+
+    async endGame(actor, roomCode) {
+      await withRoom(roomCode, (room) => {
+        tick(room, ctxFor(now()));
+        requireHost(room, actor);
+        enter(room, ctxFor(now()), "ended");
+      });
+    },
+
+    async restartGame(actor, roomCode) {
+      await withRoom(roomCode, (room) => {
+        tick(room, ctxFor(now()));
+        requireHost(room, actor);
+        if (current(room) !== "ended") {
+          throw new RoomError("wrong_phase", "End the game before starting over.");
+        }
+        room.status = "lobby";
+        room.paused = false;
+        room.pauseStartedAt = null;
+        room.rounds = [];
+        room.teamMessages = [];
+        room.nextPromptId = pickNextPrompt(pack, deps.random, null).id;
+        room.teams = TEAM_SEEDS.map((seed) => ({ ...seed, totalScore: 0, roundsWon: 0 }));
+        for (const player of room.players) {
+          player.teamId = null;
+          player.isReady = false;
+          player.joinedRound = 0;
+        }
+      });
     },
   };
 

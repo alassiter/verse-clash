@@ -34,6 +34,12 @@ export type PlayerState = {
   joinedRound: number;
 };
 
+export type TeamMessageState = {
+  teamId: string;
+  playerId: string;
+  body: string;
+};
+
 export type AssignmentState = DealtAssignment & {
   selectedOptionId: string | null;
   submittedAt: number | null;
@@ -68,7 +74,12 @@ export type RoundState = {
   scoring: TeamRoundScore[] | null;
   reveal: { teamIndex: number; segmentIndex: number };
   votes: Array<{ playerId: string; teamId: string }>;
-  reactions: Array<{ playerId: string; emoji: string }>;
+  reactions: Array<{
+    playerId: string;
+    emoji: string;
+    teamIndex: number;
+    segmentIndex: number;
+  }>;
 };
 
 export type RoomState = {
@@ -85,6 +96,7 @@ export type RoomState = {
   teams: TeamState[];
   players: PlayerState[];
   rounds: RoundState[];
+  teamMessages: TeamMessageState[];
 };
 
 export function currentRound(room: RoomState): RoundState | undefined {

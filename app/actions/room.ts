@@ -23,7 +23,7 @@ export async function createRoomAction(
 ): Promise<Result<{ roomCode: string; url: string }>> {
   try {
     const actor = await actorFromCookies();
-    const created = getRoomCommands().createRoom(actor, {
+    const created = await getRoomCommands().createRoom(actor, {
       displayName: displayName.trim() || "Host",
     });
     return { ok: true, ...created };
@@ -39,7 +39,7 @@ export async function joinRoomAction(
   try {
     const actor = await actorFromCookies();
     const roomCode = code.trim().toUpperCase();
-    getRoomCommands().joinRoom(actor, {
+    await getRoomCommands().joinRoom(actor, {
       code: roomCode,
       displayName: displayName.trim() || "Player",
     });
@@ -54,8 +54,8 @@ export async function getPlayerViewAction(
 ): Promise<Result<{ view: PlayerView }>> {
   try {
     const actor = await actorFromCookies();
-    getRoomCommands().heartbeat(actor, roomCode);
-    return { ok: true, view: getRoomCommands().getPlayerView(actor, roomCode) };
+    await getRoomCommands().heartbeat(actor, roomCode);
+    return { ok: true, view: await getRoomCommands().getPlayerView(actor, roomCode) };
   } catch (error) {
     return fail(error);
   }
@@ -66,8 +66,8 @@ export async function getHostViewAction(
 ): Promise<Result<{ view: HostView }>> {
   try {
     const actor = await actorFromCookies();
-    getRoomCommands().heartbeat(actor, roomCode);
-    return { ok: true, view: getRoomCommands().getHostView(actor, roomCode) };
+    await getRoomCommands().heartbeat(actor, roomCode);
+    return { ok: true, view: await getRoomCommands().getHostView(actor, roomCode) };
   } catch (error) {
     return fail(error);
   }
@@ -75,7 +75,7 @@ export async function getHostViewAction(
 
 export async function setReadyAction(roomCode: string, ready: boolean) {
   try {
-    getRoomCommands().setReady(await actorFromCookies(), roomCode, ready);
+    await getRoomCommands().setReady(await actorFromCookies(), roomCode, ready);
     return { ok: true as const };
   } catch (error) {
     return fail(error);
@@ -84,7 +84,7 @@ export async function setReadyAction(roomCode: string, ready: boolean) {
 
 export async function shuffleTeamsAction(roomCode: string) {
   try {
-    getRoomCommands().shuffleTeams(await actorFromCookies(), roomCode);
+    await getRoomCommands().shuffleTeams(await actorFromCookies(), roomCode);
     return { ok: true as const };
   } catch (error) {
     return fail(error);
@@ -97,7 +97,7 @@ export async function movePlayerAction(
   teamId: string | null,
 ) {
   try {
-    getRoomCommands().movePlayer(
+    await getRoomCommands().movePlayer(
       await actorFromCookies(),
       roomCode,
       playerId,
@@ -111,7 +111,7 @@ export async function movePlayerAction(
 
 export async function startRoundAction(roomCode: string) {
   try {
-    getRoomCommands().startRound(await actorFromCookies(), roomCode);
+    await getRoomCommands().startRound(await actorFromCookies(), roomCode);
     return { ok: true as const };
   } catch (error) {
     return fail(error);
@@ -120,7 +120,25 @@ export async function startRoundAction(roomCode: string) {
 
 export async function submitChoiceAction(roomCode: string, optionId: string) {
   try {
-    getRoomCommands().submitChoice(await actorFromCookies(), roomCode, optionId);
+    await getRoomCommands().submitChoice(await actorFromCookies(), roomCode, optionId);
+    return { ok: true as const };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+export async function sendTeamMessageAction(roomCode: string, body: string) {
+  try {
+    await getRoomCommands().sendTeamMessage(await actorFromCookies(), roomCode, body);
+    return { ok: true as const };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+export async function sendTeamEmojiAction(roomCode: string, emoji: string) {
+  try {
+    await getRoomCommands().sendTeamEmoji(await actorFromCookies(), roomCode, emoji);
     return { ok: true as const };
   } catch (error) {
     return fail(error);
@@ -129,7 +147,7 @@ export async function submitChoiceAction(roomCode: string, optionId: string) {
 
 export async function pauseAction(roomCode: string) {
   try {
-    getRoomCommands().pause(await actorFromCookies(), roomCode);
+    await getRoomCommands().pause(await actorFromCookies(), roomCode);
     return { ok: true as const };
   } catch (error) {
     return fail(error);
@@ -138,7 +156,7 @@ export async function pauseAction(roomCode: string) {
 
 export async function resumeAction(roomCode: string) {
   try {
-    getRoomCommands().resume(await actorFromCookies(), roomCode);
+    await getRoomCommands().resume(await actorFromCookies(), roomCode);
     return { ok: true as const };
   } catch (error) {
     return fail(error);
@@ -147,16 +165,25 @@ export async function resumeAction(roomCode: string) {
 
 export async function endRoundAction(roomCode: string) {
   try {
-    getRoomCommands().endRound(await actorFromCookies(), roomCode);
+    await getRoomCommands().endRound(await actorFromCookies(), roomCode);
     return { ok: true as const };
   } catch (error) {
     return fail(error);
   }
 }
 
-export async function sendRevealReactionAction(roomCode: string, emoji: string) {
+export async function sendRevealReactionAction(
+  roomCode: string,
+  emoji: string,
+  segmentIndex: number,
+) {
   try {
-    getRoomCommands().sendRevealReaction(await actorFromCookies(), roomCode, emoji);
+    await getRoomCommands().sendRevealReaction(
+      await actorFromCookies(),
+      roomCode,
+      emoji,
+      segmentIndex,
+    );
     return { ok: true as const };
   } catch (error) {
     return fail(error);
@@ -165,7 +192,7 @@ export async function sendRevealReactionAction(roomCode: string, emoji: string) 
 
 export async function voteAction(roomCode: string, teamId: string) {
   try {
-    getRoomCommands().vote(await actorFromCookies(), roomCode, teamId);
+    await getRoomCommands().vote(await actorFromCookies(), roomCode, teamId);
     return { ok: true as const };
   } catch (error) {
     return fail(error);
@@ -174,7 +201,7 @@ export async function voteAction(roomCode: string, teamId: string) {
 
 export async function startNextRoundAction(roomCode: string) {
   try {
-    getRoomCommands().startNextRound(await actorFromCookies(), roomCode);
+    await getRoomCommands().startNextRound(await actorFromCookies(), roomCode);
     return { ok: true as const };
   } catch (error) {
     return fail(error);
@@ -183,7 +210,16 @@ export async function startNextRoundAction(roomCode: string) {
 
 export async function endGameAction(roomCode: string) {
   try {
-    getRoomCommands().endGame(await actorFromCookies(), roomCode);
+    await getRoomCommands().endGame(await actorFromCookies(), roomCode);
+    return { ok: true as const };
+  } catch (error) {
+    return fail(error);
+  }
+}
+
+export async function restartGameAction(roomCode: string) {
+  try {
+    await getRoomCommands().restartGame(await actorFromCookies(), roomCode);
     return { ok: true as const };
   } catch (error) {
     return fail(error);

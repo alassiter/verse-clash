@@ -1,13 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { createGame, flushAsync, host, lee, priya, sam } from "./harness";
+import { createGame, flushAsync, host, lee, priya, sam, submitUntilDone } from "./harness";
 import type { RoomCommands } from "@/lib/game";
 
-function submitAll(commands: RoomCommands, actor: { id: string }, roomCode: string) {
-  for (let i = 0; i < 4; i += 1) {
-    const selection = commands.getPlayerView(actor, roomCode).selection;
-    if (!selection || selection.submitted) return;
-    commands.submitChoice(actor, roomCode, selection.options[0].id);
-  }
+async function submitAll(commands: RoomCommands, actor: { id: string }, roomCode: string) {
+  await submitUntilDone(commands, actor, roomCode);
 }
 
 async function playRound(
@@ -18,49 +14,49 @@ async function playRound(
   votingTeamId: string,
 ) {
   if (isFirstRound) {
-    commands.startRound(host, roomCode);
+    await commands.startRound(host, roomCode);
   } else {
-    commands.startNextRound(host, roomCode);
+    await commands.startNextRound(host, roomCode);
   }
   advanceTime(12_001);
-  commands.heartbeat(host, roomCode);
+  await commands.heartbeat(host, roomCode);
 
   for (const actor of [priya, sam, lee]) {
-    submitAll(commands, actor, roomCode);
+    await submitAll(commands, actor, roomCode);
   }
   await flushAsync();
 
-  for (let i = 0; i < 40; i += 1) {
-    if (commands.getPlayerView(priya, roomCode).phase === "voting") break;
-    advanceTime(4_001);
-    commands.heartbeat(host, roomCode);
-  }
-  commands.vote(priya, roomCode, votingTeamId);
+    for (let i = 0; i < 120; i += 1) {
+      if ((await commands.getPlayerView(priya, roomCode)).phase === "voting") break;
+      advanceTime(4_001);
+      await commands.heartbeat(host, roomCode);
+    }
+  await commands.vote(priya, roomCode, votingTeamId);
   advanceTime(15_001);
-  commands.heartbeat(host, roomCode);
+  await commands.heartbeat(host, roomCode);
 }
 
 describe("game over summary", () => {
   it("highlights the highest-scoring verse and the overall winner once the third round ends", async () => {
     const { commands, advanceTime } = createGame();
-    const created = commands.createRoom(host, { displayName: "Alex" });
+    const created = await commands.createRoom(host, { displayName: "Alex" });
     const roomCode = created.roomCode;
-    commands.joinRoom(priya, { code: roomCode, displayName: "Priya" });
-    commands.joinRoom(sam, { code: roomCode, displayName: "Sam" });
-    commands.joinRoom(lee, { code: roomCode, displayName: "Lee" });
-    const goblin = commands.getHostView(host, roomCode).teams.find((t) => t.id === "goblin")!;
-    const waffle = commands.getHostView(host, roomCode).teams.find((t) => t.id === "waffle")!;
-    commands.movePlayer(host, roomCode, priya.id, goblin.id);
-    commands.movePlayer(host, roomCode, sam.id, goblin.id);
-    commands.movePlayer(host, roomCode, lee.id, waffle.id);
+    await commands.joinRoom(priya, { code: roomCode, displayName: "Priya" });
+    await commands.joinRoom(sam, { code: roomCode, displayName: "Sam" });
+    await commands.joinRoom(lee, { code: roomCode, displayName: "Lee" });
+    const goblin = (await commands.getHostView(host, roomCode)).teams.find((t) => t.id === "goblin")!;
+    const waffle = (await commands.getHostView(host, roomCode)).teams.find((t) => t.id === "waffle")!;
+    await commands.movePlayer(host, roomCode, priya.id, goblin.id);
+    await commands.movePlayer(host, roomCode, sam.id, goblin.id);
+    await commands.movePlayer(host, roomCode, lee.id, waffle.id);
 
     await playRound(commands, advanceTime, roomCode, true, goblin.id);
-    expect(commands.getPlayerView(priya, roomCode).phase).toBe("standings");
+    expect((await commands.getPlayerView(priya, roomCode)).phase).toBe("standings");
     await playRound(commands, advanceTime, roomCode, false, goblin.id);
-    expect(commands.getPlayerView(priya, roomCode).phase).toBe("standings");
+    expect((await commands.getPlayerView(priya, roomCode)).phase).toBe("standings");
     await playRound(commands, advanceTime, roomCode, false, goblin.id);
 
-    const view = commands.getPlayerView(priya, roomCode);
+    const view = await commands.getPlayerView(priya, roomCode);
     expect(view.phase).toBe("ended");
 
     expect(view.bestVerse).toBeDefined();

@@ -1,9 +1,10 @@
 "use client";
 
+import { useState } from "react";
 import type { PlayerView } from "@/lib/game";
+import { REVEAL_EMOJIS } from "@/lib/game/state";
 import { BigButton, Panel } from "@/components/ui";
 import { sendRevealReactionAction, setReadyAction, submitChoiceAction, voteAction } from "@/app/actions/room";
-import { playClick } from "@/lib/sfx";
 
 export function Lobby(props: { view: PlayerView; roomCode: string }) {
   const players = props.view.lobby?.players ?? [];
@@ -165,6 +166,7 @@ export function ComposingStage(props: { view: PlayerView }) {
 
 export function RevealStage(props: { view: PlayerView; roomCode: string }) {
   const reveal = props.view.reveal;
+  const [localVotes, setLocalVotes] = useState<Record<string, string>>({});
   return (
     <Panel
       tone="red"
@@ -177,39 +179,52 @@ export function RevealStage(props: { view: PlayerView; roomCode: string }) {
       <div className="mx-auto max-w-3xl space-y-4 py-6">
         {reveal?.visibleSegments.map((segment, index) =>
           segment.type === "static" ? (
-            <p key={index} className="text-2xl text-stone-600">
-              {segment.text}
-            </p>
+            <span key={index}>{segment.text}</span>
           ) : (
-            <p key={index} className="text-5xl font-black text-stone-900">
-              {segment.text}
-            </p>
+            <span
+              key={index}
+              className="mr-1 inline-flex items-baseline gap-1 whitespace-nowrap align-baseline"
+            >
+              <span className="text-3xl font-black text-stone-900">{segment.text}</span>
+              <span className="inline-flex items-center gap-0.5 self-center">
+                {REVEAL_EMOJIS.map((emoji) => {
+                  const darkened =
+                    segment.votedEmojis[0] === emoji ||
+                    localVotes[`${reveal.teamName}:${segment.segmentIndex}`] === emoji;
+                  return (
+                    <button
+                      key={emoji}
+                      type="button"
+                      className={`text-sm leading-none transition duration-150 ${
+                        darkened
+                          ? "opacity-100 grayscale-0"
+                          : "opacity-75 grayscale hover:opacity-90"
+                      }`}
+                      onClick={() => {
+                        const key = `${reveal.teamName}:${segment.segmentIndex}`;
+                        setLocalVotes((current) => ({
+                          ...current,
+                          [key]: emoji,
+                        }));
+                        void sendRevealReactionAction(
+                          props.roomCode,
+                          emoji,
+                          segment.segmentIndex,
+                        );
+                      }}
+                    >
+                      {emoji}
+                    </button>
+                  );
+                })}
+              </span>
+            </span>
           ),
         )}
       </div>
       {reveal?.attribution ? (
         <p className="text-2xl text-orange-800">{reveal.attribution}</p>
       ) : null}
-      <div className="pointer-events-none absolute inset-0 flex flex-wrap items-start justify-center gap-2 p-4 text-5xl opacity-80">
-        {reveal?.bursts.slice(-8).map((burst, index) => (
-          <span key={`${burst.emoji}-${index}`}>{burst.emoji}</span>
-        ))}
-      </div>
-      <div className="mt-10 flex justify-center gap-3">
-        {["😂", "👏", "🤯", "❤️", "😮"].map((emoji) => (
-          <button
-            key={emoji}
-            type="button"
-            className="rounded-2xl bg-orange-100 px-4 py-3 text-4xl"
-            onClick={() => {
-              playClick();
-              void sendRevealReactionAction(props.roomCode, emoji);
-            }}
-          >
-            {emoji}
-          </button>
-        ))}
-      </div>
     </Panel>
   );
 }

@@ -35,7 +35,7 @@ describe("composing phase", () => {
     };
     const { commands, advanceTime } = createGame({ ai });
     const roomCode = await playThroughSelection(commands, advanceTime);
-    const view = commands.getPlayerView(priya, roomCode);
+    const view = await commands.getPlayerView(priya, roomCode);
     expect(view.phase).toBe("reveal");
     expect(
       view.reveal?.composition.some(
@@ -44,7 +44,7 @@ describe("composing phase", () => {
     ).toBe(true);
   });
 
-  it("falls back to the deterministic composer when the AI call rejects", async () => {
+  it("falls back to a cycling-blank flavor when the AI call rejects", async () => {
     const ai: AiComposer = {
       async composeAndJudge() {
         throw new Error("upstream failure");
@@ -52,7 +52,37 @@ describe("composing phase", () => {
     };
     const { commands, advanceTime } = createGame({ ai });
     const roomCode = await playThroughSelection(commands, advanceTime);
-    const view = commands.getPlayerView(priya, roomCode);
+    const view = await commands.getPlayerView(priya, roomCode);
+    expect(view.phase).toBe("reveal");
+    const composition = view.reveal?.composition ?? [];
+    expect(
+      composition.some(
+        (segment) => segment.type === "contribution" && segment.displayName === "Priya",
+      ),
+    ).toBe(true);
+    expect(
+      composition.some(
+        (segment) =>
+          segment.type === "contribution" &&
+          segment.displayName === "House" &&
+          segment.text === "continue",
+      ),
+    ).toBe(false);
+    expect(
+      composition.some((segment) => segment.type === "static" && segment.text.includes(" — to ")),
+    ).toBe(false);
+  });
+
+  it("falls back to a cycling-blank flavor when the AI call never resolves before the ceiling", async () => {
+    const ai: AiComposer = {
+      composeAndJudge: () => new Promise(() => {}),
+    };
+    const { commands, advanceTime } = createGame({ ai });
+    const roomCode = await playThroughSelection(commands, advanceTime);
+    expect((await commands.getPlayerView(priya, roomCode)).phase).toBe("composing");
+    advanceTime(20_001);
+    await commands.heartbeat(host, roomCode);
+    const view = await commands.getPlayerView(priya, roomCode);
     expect(view.phase).toBe("reveal");
     expect(
       view.reveal?.composition.some(
@@ -61,26 +91,10 @@ describe("composing phase", () => {
           segment.displayName === "House" &&
           segment.text === "continue",
       ),
-    ).toBe(true);
-  });
-
-  it("falls back to the deterministic composer when the AI call never resolves before the ceiling", async () => {
-    const ai: AiComposer = {
-      composeAndJudge: () => new Promise(() => {}),
-    };
-    const { commands, advanceTime } = createGame({ ai });
-    const roomCode = await playThroughSelection(commands, advanceTime);
-    expect(commands.getPlayerView(priya, roomCode).phase).toBe("composing");
-    advanceTime(20_001);
-    commands.heartbeat(host, roomCode);
-    const view = commands.getPlayerView(priya, roomCode);
-    expect(view.phase).toBe("reveal");
+    ).toBe(false);
     expect(
       view.reveal?.composition.some(
-        (segment) =>
-          segment.type === "contribution" &&
-          segment.displayName === "House" &&
-          segment.text === "continue",
+        (segment) => segment.type === "contribution" && segment.displayName === "Priya",
       ),
     ).toBe(true);
   });
@@ -96,7 +110,7 @@ describe("composing phase", () => {
     };
     const { commands, advanceTime } = createGame({ ai });
     const roomCode = await playThroughSelection(commands, advanceTime);
-    const view = commands.getPlayerView(priya, roomCode);
+    const view = await commands.getPlayerView(priya, roomCode);
     expect(view.phase).toBe("composing");
     expect(view.composingWords).toEqual(sentFills);
     expect(view.composingWords?.map((word) => word.displayName)).toEqual(
@@ -111,10 +125,10 @@ describe("composing phase", () => {
     };
     const { commands, advanceTime } = createGame({ ai });
     const roomCode = await playThroughSelection(commands, advanceTime);
-    expect(commands.getPlayerView(priya, roomCode).phase).toBe("composing");
+    expect((await commands.getPlayerView(priya, roomCode)).phase).toBe("composing");
 
-    commands.endRound(host, roomCode);
-    expect(commands.getPlayerView(priya, roomCode).phase).toBe("standings");
+    await commands.endRound(host, roomCode);
+    expect((await commands.getPlayerView(priya, roomCode)).phase).toBe("standings");
 
     pending.resolve({
       requestId: "stale",
@@ -122,6 +136,6 @@ describe("composing phase", () => {
     });
     await flushAsync();
 
-    expect(commands.getPlayerView(priya, roomCode).phase).toBe("standings");
+    expect((await commands.getPlayerView(priya, roomCode)).phase).toBe("standings");
   });
 });

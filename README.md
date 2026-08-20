@@ -18,9 +18,11 @@ Open [http://localhost:3000](http://localhost:3000). Create a room, share the 6-
 
 Identity is a cookie, not an account. Refreshing the page restores the same person in the same room.
 
-This dev loop keeps game state in server memory, which is enough for a local table. It will not survive multiple serverless instances or a process restart.
+Without a configured Supabase project, room state lives in server memory, which is enough for a local table. It will not survive multiple serverless instances or a process restart — see "Supabase" below for the persistent version this app needs in production.
 
-## Supabase (optional, for a hosted room)
+## Supabase (room persistence, required for a hosted room)
+
+Room state (`lib/game/state.ts`'s `RoomState`) is stored as a single JSONB blob per room in a Supabase Postgres `rooms` table, with an optimistic-concurrency `version` column so concurrent writes from different serverless instances never clobber each other (see `withRoom` in `lib/game/commands.ts`). When Supabase env vars are absent, `lib/game/runtime.ts` falls back to the in-memory store automatically, so local dev works with zero setup.
 
 Copy `.env.example` to `.env.local` and fill in:
 
@@ -28,16 +30,15 @@ Copy `.env.example` to `.env.local` and fill in:
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 - `SUPABASE_SERVICE_ROLE_KEY`
 
-In the Supabase project:
+In the Supabase project, run `supabase/migrations/20260818120000_game_schema.sql`. This table is only ever read/written by server actions using the service-role key, never by the browser, so it has no RLS policies — anon/authenticated access is explicitly revoked.
 
-1. Enable **Anonymous** sign-ins (Authentication → Providers → Anonymous).
-2. Run `supabase/migrations/20260818120000_game_schema.sql`.
+### Room cleanup
 
-Mutations still go through Next.js server actions. The migration defines tables, RLS, and Realtime publication so a later persistence adapter can map the in-memory room aggregate onto Postgres.
+`app/api/cron/cleanup-rooms` deletes rooms that haven't been touched in 24 hours, keeping the free-tier database tidy. It's wired up as a daily [Vercel Cron Job](https://vercel.com/docs/cron-jobs) in `vercel.json`, and requires a `CRON_SECRET` env var (see `.env.example`) so only Vercel can trigger it.
 
 ## Production
 
-When you are ready to host a real room, run the production wizard. It walks through the Supabase project, Anonymous sign-ins, the schema migration, and a Vercel deploy. Secrets are written to gitignored `.env.local` and to Vercel Environment Variables — never committed.
+When you are ready to host a real room, run the production wizard. It walks through the Supabase project, the schema migration, and a Vercel deploy. Secrets are written to gitignored `.env.local` and to Vercel Environment Variables — never committed.
 
 ```bash
 ./scripts/prepare-production.sh

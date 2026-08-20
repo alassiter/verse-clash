@@ -2,8 +2,25 @@ import { loadContentPack, validatePromptCandidate, type ContentPack } from "@/li
 import { createAnthropicComposer } from "@/lib/ai/composer";
 import { generatePromptBatch, PROMPT_CATEGORIES } from "@/lib/ai/promptGenerator";
 import { createRoomCommands, type RoomCommands } from "@/lib/game";
+import { createInMemoryRoomStore, type RoomStore } from "@/lib/game/room-store";
+import { createSupabaseRoomStore } from "@/lib/game/supabase-room-store";
 
-const globalForGame = globalThis as { __verseClashCommands?: RoomCommands };
+const globalForGame = globalThis as {
+  __verseClashCommands?: RoomCommands;
+  __verseClashStore?: RoomStore;
+};
+
+function hasSupabaseConfig(): boolean {
+  return Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY);
+}
+
+function getStore(): RoomStore {
+  if (hasSupabaseConfig()) return createSupabaseRoomStore();
+  if (!globalForGame.__verseClashStore) {
+    globalForGame.__verseClashStore = createInMemoryRoomStore();
+  }
+  return globalForGame.__verseClashStore;
+}
 
 const PROMPT_REFRESH_INTERVAL_MS = 90_000;
 const PROMPT_BATCH_SIZE = 4;
@@ -66,6 +83,7 @@ export function getRoomCommands(): RoomCommands {
       clock: { now: () => Date.now() },
       random: Math.random,
       roomUrl: (code) => `/room/${code}`,
+      store: getStore(),
       ai: createAnthropicComposer(loaded.pack),
       onHeartbeat: createPromptPoolRefresher(loaded.pack),
     });

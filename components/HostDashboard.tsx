@@ -1,9 +1,11 @@
 "use client";
 
+import { useState } from "react";
 import type { HostView } from "@/lib/game";
 import {
   endGameAction,
   endRoundAction,
+  restartGameAction,
   movePlayerAction,
   pauseAction,
   resumeAction,
@@ -14,10 +16,16 @@ import {
 import { BigButton, Panel } from "@/components/ui";
 
 export function HostDashboard(props: { view: HostView; roomCode: string }) {
+  const [error, setError] = useState<string | null>(null);
   const share =
     typeof window !== "undefined"
       ? `${window.location.origin}/room/${props.roomCode}`
       : `/room/${props.roomCode}`;
+  const run = (action: Promise<{ ok: true } | { ok: false; error: string }>) => {
+    void action.then((result) => {
+      setError(result.ok ? null : result.error);
+    });
+  };
   return (
     <div className="grid gap-6">
       <Panel tone="red" title="Room">
@@ -55,7 +63,7 @@ export function HostDashboard(props: { view: HostView; roomCode: string }) {
                   onChange={(event) => {
                     const name = event.target.value;
                     const team = props.view.teams.find((entry) => entry.name === name);
-                    void movePlayerAction(props.roomCode, player.id, team?.id ?? null);
+                    run(movePlayerAction(props.roomCode, player.id, team?.id ?? null));
                   }}
                 >
                   <option value="">Off-team</option>
@@ -73,10 +81,10 @@ export function HostDashboard(props: { view: HostView; roomCode: string }) {
       <Panel className="flex flex-wrap gap-3">
         {props.view.phase === "gathering" ? (
           <>
-            <BigButton onClick={() => void shuffleTeamsAction(props.roomCode)} tone="ghost">
+            <BigButton onClick={() => run(shuffleTeamsAction(props.roomCode))} tone="ghost">
               Shuffle teams
             </BigButton>
-            <BigButton onClick={() => void startRoundAction(props.roomCode)}>
+            <BigButton onClick={() => run(startRoundAction(props.roomCode))}>
               Start round
             </BigButton>
           </>
@@ -84,31 +92,37 @@ export function HostDashboard(props: { view: HostView; roomCode: string }) {
         {props.view.phase === "prompt_reveal" || props.view.phase === "selecting" ? (
           <>
             {props.view.paused ? (
-              <BigButton onClick={() => void resumeAction(props.roomCode)}>Resume</BigButton>
+              <BigButton onClick={() => run(resumeAction(props.roomCode))}>Resume</BigButton>
             ) : (
-              <BigButton onClick={() => void pauseAction(props.roomCode)} tone="ghost">
+              <BigButton onClick={() => run(pauseAction(props.roomCode))} tone="ghost">
                 Pause
               </BigButton>
             )}
           </>
         ) : null}
         {props.view.phase === "standings" ? (
-          <BigButton onClick={() => void startNextRoundAction(props.roomCode)}>
+          <BigButton onClick={() => run(startNextRoundAction(props.roomCode))}>
             Next round
           </BigButton>
         ) : null}
         {props.view.phase !== "ended" &&
         props.view.phase !== "gathering" &&
         props.view.phase !== "standings" ? (
-          <BigButton onClick={() => void endRoundAction(props.roomCode)} tone="ghost">
+          <BigButton onClick={() => run(endRoundAction(props.roomCode))} tone="ghost">
             End this round
           </BigButton>
         ) : null}
         {props.view.phase !== "ended" && props.view.phase !== "gathering" ? (
-          <BigButton tone="danger" onClick={() => void endGameAction(props.roomCode)}>
+          <BigButton tone="danger" onClick={() => run(endGameAction(props.roomCode))}>
             End game
           </BigButton>
         ) : null}
+        {props.view.phase === "ended" ? (
+          <BigButton onClick={() => run(restartGameAction(props.roomCode))}>
+            Start new game
+          </BigButton>
+        ) : null}
+        {error ? <p className="w-full text-lg text-red-700">{error}</p> : null}
       </Panel>
     </div>
   );

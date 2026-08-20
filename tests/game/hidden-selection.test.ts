@@ -11,40 +11,45 @@ import {
   sam,
 } from "./harness";
 
-function seatPriyaAndSamTogether(commands: ReturnType<typeof createGame>["commands"], roomCode: string) {
-  const goblin = commands
-    .getHostView(host, roomCode)
-    .teams.find((team) => team.id === "goblin");
-  if (!goblin) throw new Error("missing Red team");
-  commands.movePlayer(host, roomCode, priya.id, goblin.id);
-  commands.movePlayer(host, roomCode, sam.id, goblin.id);
+async function seatPriyaAndSamTogether(
+  commands: ReturnType<typeof createGame>["commands"],
+  roomCode: string,
+) {
+  const goblin = (await commands.getHostView(host, roomCode)).teams.find(
+    (team) => team.id === "goblin",
+  );
+  if (!goblin) throw new Error("missing Goblin");
+  await commands.movePlayer(host, roomCode, priya.id, goblin.id);
+  await commands.movePlayer(host, roomCode, sam.id, goblin.id);
 }
 
 describe("hidden selection in a team room", () => {
-  it("starts Round 1 on the previewed prompt, chosen at random per room", () => {
+  it("starts Round 1 on the first authored prompt", async () => {
     const { commands, advanceTime } = createGame();
-    const roomCode = openLobby(commands);
-    const preview = commands.getHostView(host, roomCode).promptPreview;
+    const roomCode = await openLobby(commands);
+    const preview = (await commands.getHostView(host, roomCode)).promptPreview;
     expect(preview?.text).toBeTruthy();
     expect(preview?.wordPools.length).toBeGreaterThan(0);
-    commands.startRound(host, roomCode);
-    const player = commands.getPlayerView(priya, roomCode);
+    await commands.startRound(host, roomCode);
+    const player = await commands.getPlayerView(priya, roomCode);
     expect(player.prompt?.text).toBe(preview?.text);
     expect(player.selection).toBeUndefined();
     advanceTime(12_001);
-    commands.heartbeat(host, roomCode);
-    expect(commands.getPlayerView(priya, roomCode).phase).toBe("selecting");
-    expect(commands.getPlayerView(priya, roomCode).selection?.options).toHaveLength(5);
+    await commands.heartbeat(host, roomCode);
+    expect((await commands.getPlayerView(priya, roomCode)).phase).toBe("selecting");
+    expect((await commands.getPlayerView(priya, roomCode)).selection?.options).toHaveLength(
+      5,
+    );
   });
 
-  it("deals hidden 2/2/1 options unique within a team and only shows the owner their words", () => {
+  it("deals hidden 2/2/1 options unique within a team and only shows the owner their words", async () => {
     const { commands, advanceTime } = createGame();
-    const roomCode = openLobby(commands);
-    seatPriyaAndSamTogether(commands, roomCode);
-    enterSelecting(commands, advanceTime, roomCode);
+    const roomCode = await openLobby(commands);
+    await seatPriyaAndSamTogether(commands, roomCode);
+    await enterSelecting(commands, advanceTime, roomCode);
 
-    const priyaView = commands.getPlayerView(priya, roomCode);
-    const samView = commands.getPlayerView(sam, roomCode);
+    const priyaView = await commands.getPlayerView(priya, roomCode);
+    const samView = await commands.getPlayerView(sam, roomCode);
     expect(priyaView.phase).toBe("selecting");
     expect(priyaView.selection?.options).toHaveLength(5);
     expect(priyaView.selection?.playerLabel).toBeTruthy();
@@ -59,77 +64,105 @@ describe("hidden selection in a team room", () => {
       false,
     );
     expect(samView.teammates.find((mate) => mate.id === priya.id)?.options).toBeUndefined();
-    expect(samView.teammates.find((mate) => mate.id === priya.id)?.selectedText).toBeUndefined();
+    expect(
+      samView.teammates.find((mate) => mate.id === priya.id)?.selectedText,
+    ).toBeUndefined();
   });
 
-  it("accepts one submit, keeps it on refresh, and hides the word from teammates", () => {
+  it("accepts a submit, deals the next hand, and hides the word from teammates", async () => {
     const { commands, advanceTime } = createGame();
-    const roomCode = openLobby(commands);
-    seatPriyaAndSamTogether(commands, roomCode);
-    enterSelecting(commands, advanceTime, roomCode);
-    const optionId = commands.getPlayerView(priya, roomCode).selection!.options[0].id;
-    commands.submitChoice(priya, roomCode, optionId);
+    const roomCode = await openLobby(commands);
+    await seatPriyaAndSamTogether(commands, roomCode);
+    await enterSelecting(commands, advanceTime, roomCode);
+    const optionId = (await commands.getPlayerView(priya, roomCode)).selection!.options[0]
+      .id;
+    await commands.submitChoice(priya, roomCode, optionId);
 
-    const priyaView = commands.getPlayerView(priya, roomCode);
-    expect(priyaView.selection?.submitted).toBe(true);
-    expect(priyaView.selection?.selectedOptionId).toBe(optionId);
+    const priyaView = await commands.getPlayerView(priya, roomCode);
+    expect(priyaView.selection?.submitted).toBe(false);
+    expect(priyaView.selection?.options).toHaveLength(5);
 
-    const samView = commands.getPlayerView(sam, roomCode);
+    const samView = await commands.getPlayerView(sam, roomCode);
     expect(samView.teammates.find((mate) => mate.id === priya.id)?.submitted).toBe(
-      true,
+      false,
     );
-    expect(samView.teammates.find((mate) => mate.id === priya.id)?.selectedText).toBeUndefined();
+    expect(
+      samView.teammates.find((mate) => mate.id === priya.id)?.selectedText,
+    ).toBeUndefined();
     expect(samView.teammates.find((mate) => mate.id === priya.id)?.options).toBeUndefined();
+  });
+
+  it("isolates team chat and team emojis", async () => {
+    const { commands, advanceTime } = createGame();
+    const roomCode = await openLobby(commands);
+    await seatPriyaAndSamTogether(commands, roomCode);
+    const waffleTeam = (await commands.getHostView(host, roomCode)).teams.find(
+      (team) => team.id === "waffle",
+    );
+    if (!waffleTeam) throw new Error("missing Waffle");
+    await commands.movePlayer(host, roomCode, lee.id, waffleTeam.id);
+    await enterSelecting(commands, advanceTime, roomCode);
+    await commands.sendTeamMessage(priya, roomCode, "someone pick something normal");
+    await commands.sendTeamEmoji(priya, roomCode, "👏");
+
+    const goblin = await commands.getPlayerView(priya, roomCode);
+    const waffle = await commands.getPlayerView(lee, roomCode);
+    expect(goblin.teamChat.map((message) => message.body)).toEqual([
+      "someone pick something normal",
+      "👏",
+    ]);
+    expect(waffle.teamChat).toEqual([]);
   });
 
   it("pauses the timer and fills unsubmitted players from their dealt set when selecting ends", async () => {
     const { commands, advanceTime } = createGame();
-    const roomCode = openLobby(commands);
-    enterSelecting(commands, advanceTime, roomCode);
-    const endsAt = commands.getPlayerView(priya, roomCode).timerEndsAt;
+    const roomCode = await openLobby(commands);
+    await enterSelecting(commands, advanceTime, roomCode);
+    const endsAt = (await commands.getPlayerView(priya, roomCode)).timerEndsAt;
     expect(endsAt).toBeTruthy();
-    commands.pause(host, roomCode);
-    expect(commands.getPlayerView(priya, roomCode).paused).toBe(true);
+    await commands.pause(host, roomCode);
+    expect((await commands.getPlayerView(priya, roomCode)).paused).toBe(true);
     advanceTime(20_000);
-    commands.resume(host, roomCode);
-    const resumed = commands.getPlayerView(priya, roomCode);
+    await commands.resume(host, roomCode);
+    const resumed = await commands.getPlayerView(priya, roomCode);
     expect(resumed.paused).toBe(false);
     expect(resumed.timerEndsAt).toBe((endsAt ?? 0) + 20_000);
 
-    const dealt = commands
-      .getPlayerView(priya, roomCode)
-      .selection!.options.map((option) => option.id);
+    const dealt = (await commands.getPlayerView(priya, roomCode)).selection!.options.map(
+      (option) => option.id,
+    );
     advanceTime(90_001);
-    expect(commands.getPlayerView(priya, roomCode).phase).toBe("selecting");
-    commands.heartbeat(host, roomCode);
-    await flushAsync();
-    const after = commands.getPlayerView(priya, roomCode);
+    expect((await commands.getPlayerView(priya, roomCode)).phase).toBe("selecting");
+    await commands.heartbeat(host, roomCode);
+    const after = await commands.getPlayerView(priya, roomCode);
     expect(after.phase).toBe("reveal");
     expect(dealt).toContain(after.selection?.selectedOptionId);
   });
 
-  it("gives overflow players an assignment and parks mid-round joiners until the next round", () => {
+  it("gives overflow players an assignment and parks mid-round joiners until the next round", async () => {
     const { commands, advanceTime } = createGame();
-    const roomCode = openLobby(commands);
-    commands.joinRoom(jo, { code: roomCode, displayName: "Jo" });
+    const roomCode = await openLobby(commands);
+    await commands.joinRoom(jo, { code: roomCode, displayName: "Jo" });
     const kim = { id: "player-kim" };
-    commands.joinRoom(kim, { code: roomCode, displayName: "Kim" });
-    const goblin = commands
-      .getHostView(host, roomCode)
-      .teams.find((team) => team.id === "goblin");
-    if (!goblin) throw new Error("missing Red team");
-    commands.movePlayer(host, roomCode, sam.id, goblin.id);
-    commands.movePlayer(host, roomCode, lee.id, goblin.id);
-    commands.movePlayer(host, roomCode, jo.id, goblin.id);
-    commands.movePlayer(host, roomCode, kim.id, goblin.id);
-    commands.movePlayer(host, roomCode, priya.id, goblin.id);
-    enterSelecting(commands, advanceTime, roomCode);
-    expect(commands.getPlayerView(jo, roomCode).selection?.options).toHaveLength(5);
-    expect(commands.getPlayerView(kim, roomCode).selection?.options).toHaveLength(5);
+    await commands.joinRoom(kim, { code: roomCode, displayName: "Kim" });
+    const goblin = (await commands.getHostView(host, roomCode)).teams.find(
+      (team) => team.id === "goblin",
+    );
+    if (!goblin) throw new Error("missing Goblin");
+    await commands.movePlayer(host, roomCode, sam.id, goblin.id);
+    await commands.movePlayer(host, roomCode, lee.id, goblin.id);
+    await commands.movePlayer(host, roomCode, jo.id, goblin.id);
+    await commands.movePlayer(host, roomCode, kim.id, goblin.id);
+    await commands.movePlayer(host, roomCode, priya.id, goblin.id);
+    await enterSelecting(commands, advanceTime, roomCode);
+    expect((await commands.getPlayerView(jo, roomCode)).selection?.options).toHaveLength(5);
+    expect((await commands.getPlayerView(kim, roomCode)).selection?.options).toHaveLength(
+      5,
+    );
 
     const late = { id: "late-1" };
-    commands.joinRoom(late, { code: roomCode, displayName: "Nico" });
-    const waiting = commands.getPlayerView(late, roomCode);
+    await commands.joinRoom(late, { code: roomCode, displayName: "Nico" });
+    const waiting = await commands.getPlayerView(late, roomCode);
     expect(waiting.waitingForNextRound).toBe(true);
     expect(waiting.selection).toBeUndefined();
   });

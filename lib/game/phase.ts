@@ -1,17 +1,14 @@
 import {
-  assembleComposition,
-  autoFillWord,
+  cyclingFallback,
   CHAOS_CARD_IDS,
-  dealForTeam,
-  slotsForTemplate,
+  dealHand,
+  dealSlotsForTemplate,
   type ChaosCardId,
   type ContentPack,
   type CompositionFill,
   type Prompt,
 } from "@/lib/content";
 import {
-  AUTO_FILL_DISPLAY_NAME,
-  AUTO_FILL_PLAYER_PREFIX,
   currentRound,
   leadingTeams,
   TEAM_SEEDS,
@@ -38,9 +35,87 @@ export const PHASE_DURATIONS = {
   voting: 15_000,
 } as const;
 
+const FILL_FLOOR = 11;
+const DOUBLE_TROUBLE_FILL_FLOOR = 22;
+
+export function fillCountForTeam(memberCount: number, doubleTrouble: boolean): number {
+  const perMember = doubleTrouble ? 2 : 1;
+  const floor = doubleTrouble ? DOUBLE_TROUBLE_FILL_FLOOR : FILL_FLOOR;
+  return Math.max(memberCount * perMember, floor);
+}
+
+function liveUsedTexts(room: RoomState, round: RoundState, teamId: string): Set<string> {
+  const used = new Set<string>();
+  for (const assignment of round.assignments) {
+    if (resolveAssignmentTeamId(room, assignment) !== teamId) continue;
+    if (assignment.submittedAt && assignment.selectedOptionId) {
+      const chosen = assignment.options.find((option) => option.id === assignment.selectedOptionId);
+      if (chosen) used.add(chosen.text);
+      continue;
+    }
+    if (!assignment.submittedAt) {
+      for (const option of assignment.options) used.add(option.text);
+    }
+  }
+  return used;
+}
+
+function slotForAssignment(pack: ContentPack, assignment: AssignmentState) {
+  const slot = pack.slots.find((entry) => entry.id === assignment.slotId);
+  if (!slot) {
+    throw new Error(`Missing slot ${assignment.slotId}`);
+  }
+  return slot;
+}
+
+function dealLiveHand(
+  pack: ContentPack,
+  room: RoomState,
+  round: RoundState,
+  assignment: AssignmentState,
+  random: () => number,
+) {
+  const teamId = resolveAssignmentTeamId(room, assignment);
+  assignment.options = dealHand(pack, {
+    promptId: round.promptId,
+    slot: slotForAssignment(pack, assignment),
+    usedTexts: liveUsedTexts(room, round, teamId ?? ""),
+    random,
+    chaosCard: round.chaosCard,
+  });
+}
+
+/** After a Fill is submitted, deal this player's next hand if they still owe one. */
+export function dealNextHandForPlayer(
+  pack: ContentPack,
+  room: RoomState,
+  round: RoundState,
+  playerId: string,
+  random: () => number,
+) {
+  const next = round.assignments.find(
+    (entry) => entry.playerId === playerId && !entry.submittedAt,
+  );
+  if (!next || next.options.length > 0) return;
+  dealLiveHand(pack, room, round, next, random);
+}
+
+function dealRemainingHands(
+  pack: ContentPack,
+  room: RoomState,
+  round: RoundState,
+  random: () => number,
+) {
+  for (const assignment of round.assignments) {
+    if (assignment.submittedAt || assignment.options.length > 0) continue;
+    dealLiveHand(pack, room, round, assignment, random);
+  }
+}
+
 export type AiHooks = {
   composeAndJudge(input: ComposeJudgeInput): Promise<ComposeJudgeResult>;
   getRoom(roomId: string): RoomState | undefined;
+  persistRoom(roomId: string): Promise<void>;
   now(): number;
 };
 
@@ -207,42 +282,35 @@ function beginPrompt(room: RoomState, ctx: PhaseContext) {
   for (const team of room.teams) {
     const members = seated.filter((player) => player.teamId === team.id);
     if (members.length === 0) continue;
-    const playerIds =
-      chaosCard === "double_trouble"
-        ? members.flatMap((member) => [member.id, member.id])
-        : members.map((member) => member.id);
-    const dealt = dealForTeam(ctx.pack, {
-      promptId: prompt.id,
-      templateId,
-      playerIds,
-      random: ctx.random,
-      chaosCard: chaosCard ?? undefined,
-    });
-    for (const assignment of dealt) {
-      assignments.push({
-        ...assignment,
+    const slots = dealSlotsForTemplate(ctx.pack, templateId, chaosCard);
+    const count = fillCountForTeam(members.length, chaosCard === "double_trouble");
+    const teamAssignments: AssignmentState[] = [];
+    for (let i = 0; i < count; i += 1) {
+      const slot = slots[i % slots.length];
+      const member = members[i % members.length];
+      teamAssignments.push({
+        playerId: member.id,
+        slotId: slot.id,
+        playerLabel: slot.playerLabel,
+        options: [],
         selectedOptionId: null,
         submittedAt: null,
       });
     }
-    // A solo team has no one around to fill the slots the deal didn't hand to
-    // its one player, so the game picks real words for them right away rather
-    // than leaving those slots to the same static house filler every round.
-    if (members.length === 1) {
-      const coveredSlotIds = new Set(dealt.map((assignment) => assignment.slotId));
-      for (const slot of slotsForTemplate(ctx.pack, templateId)) {
-        if (coveredSlotIds.has(slot.id)) continue;
-        const word = autoFillWord(ctx.pack, slot, prompt.id, chaosCard, ctx.random);
-        assignments.push({
-          playerId: `${AUTO_FILL_PLAYER_PREFIX}${team.id}`,
-          slotId: slot.id,
-          playerLabel: slot.playerLabel,
-          options: [{ id: word.id, text: word.text }],
-          selectedOptionId: word.id,
-          submittedAt: ctx.now,
-        });
-      }
+    const firstWave = new Set<string>();
+    const usedTexts = new Set<string>();
+    for (const assignment of teamAssignments) {
+      if (firstWave.has(assignment.playerId)) continue;
+      firstWave.add(assignment.playerId);
+      assignment.options = dealHand(ctx.pack, {
+        promptId: prompt.id,
+        slot: slotForAssignment(ctx.pack, assignment),
+        usedTexts,
+        random: ctx.random,
+        chaosCard,
+      });
     }
+    assignments.push(...teamAssignments);
   }
   room.rounds.push({
     id: `round-${number}`,
@@ -274,7 +342,14 @@ function enterSelecting(room: RoomState, round: RoundState, at: number) {
   room.status = "in_progress";
 }
 
-function fillUnsubmitted(round: RoundState, random: () => number, now: number) {
+function fillUnsubmitted(
+  pack: ContentPack,
+  room: RoomState,
+  round: RoundState,
+  random: () => number,
+  now: number,
+) {
+  dealRemainingHands(pack, room, round, random);
   for (const assignment of round.assignments) {
     if (assignment.submittedAt || assignment.options.length === 0) continue;
     const index = Math.min(
@@ -286,12 +361,7 @@ function fillUnsubmitted(round: RoundState, random: () => number, now: number) {
   }
 }
 
-// Auto-filled assignments (see beginPrompt) carry a synthetic playerId that
-// encodes their team directly, since there's no real player record to look up.
 function resolveAssignmentTeamId(room: RoomState, assignment: AssignmentState): string | undefined {
-  if (assignment.playerId.startsWith(AUTO_FILL_PLAYER_PREFIX)) {
-    return assignment.playerId.slice(AUTO_FILL_PLAYER_PREFIX.length);
-  }
   return room.players.find((entry) => entry.id === assignment.playerId)?.teamId ?? undefined;
 }
 
@@ -314,10 +384,7 @@ export function buildTeamFills(
           resolveAssignmentTeamId(room, assignment) === team.id && assignment.selectedOptionId,
       )
       .map((assignment) => {
-        const isAutoFilled = assignment.playerId.startsWith(AUTO_FILL_PLAYER_PREFIX);
-        const player = isAutoFilled
-          ? null
-          : room.players.find((entry) => entry.id === assignment.playerId)!;
+        const player = room.players.find((entry) => entry.id === assignment.playerId)!;
         const option = assignment.options.find(
           (entry) => entry.id === assignment.selectedOptionId,
         )!;
@@ -326,7 +393,7 @@ export function buildTeamFills(
           slotId: assignment.slotId,
           text: option.text,
           playerId: assignment.playerId,
-          displayName: isAutoFilled ? AUTO_FILL_DISPLAY_NAME : player!.displayName,
+          displayName: player.displayName,
           semanticCategory: word?.semanticCategory ?? "abstract",
           bannedPairCategories: word?.bannedPairCategories,
           wordId: word?.id,
@@ -336,14 +403,14 @@ export function buildTeamFills(
   });
 }
 
-function deterministicCompositions(
+function flavorCompositions(
   pack: ContentPack,
-  templateId: string,
   teamsFills: Array<{ teamId: string; fills: CompositionFill[] }>,
+  random: () => number,
 ): RoundState["compositions"] {
   return teamsFills.map(({ teamId, fills }) => ({
     teamId,
-    segments: assembleComposition(pack, { templateId, fills }).segments,
+    segments: cyclingFallback(pack, fills, random),
     source: "deterministic_fallback" as const,
   }));
 }
@@ -363,7 +430,7 @@ function applySabotage(
 }
 
 function beginComposing(room: RoomState, round: RoundState, ctx: PhaseContext) {
-  fillUnsubmitted(round, ctx.random, ctx.now);
+  fillUnsubmitted(ctx.pack, room, round, ctx.random, ctx.now);
   const teamsFills = buildTeamFills(room, round, ctx.pack);
   if (round.chaosCard === "sabotage") {
     applySabotage(teamsFills, ctx.random);
@@ -380,17 +447,20 @@ function beginComposing(room: RoomState, round: RoundState, ctx: PhaseContext) {
   const roundId = round.id;
   const templateId = round.templateId;
   const promptId = round.promptId;
+  const random = ctx.random;
 
   ai
     .composeAndJudge({ roomId, roundId, requestId, templateId, promptId, teams: teamsFills })
-    .then((result) => {
+    .then(async (result) => {
       applyComposition(ai, pack, roomId, roundId, requestId, teamsFills, result);
+      await ai.persistRoom(roomId);
     })
-    .catch(() => {
+    .catch(async () => {
       applyComposition(ai, pack, roomId, roundId, requestId, teamsFills, {
         requestId,
-        compositions: deterministicCompositions(pack, templateId, teamsFills),
+        compositions: flavorCompositions(pack, teamsFills, random),
       });
+      await ai.persistRoom(roomId);
     });
 }
 
@@ -425,7 +495,7 @@ function forceFallbackComposition(room: RoomState, round: RoundState, ctx: Phase
   if (round.chaosCard === "sabotage") {
     applySabotage(teamsFills, ctx.random);
   }
-  round.compositions = deterministicCompositions(ctx.pack, round.templateId, teamsFills);
+  round.compositions = flavorCompositions(ctx.pack, teamsFills, ctx.random);
   round.judging = null;
   round.scoring = scoreRound(ctx.pack, teamsFills, null);
   if (round.pendingComposition) {
@@ -490,4 +560,3 @@ function finalizeRoundScoring(room: RoomState, round: RoundState) {
     }
   }
 }
-

@@ -50,6 +50,23 @@ export type TeammateView = {
   selectedText?: string;
 };
 
+export type ChatMessageView = {
+  playerName: string;
+  body: string;
+};
+
+export type RevealSegmentView =
+  | { type: "static"; text: string }
+  | {
+      type: "contribution";
+      text: string;
+      playerId: string;
+      displayName: string;
+      slotId: string;
+      segmentIndex: number;
+      votedEmojis: string[];
+  };
+
 export type PlayerView = {
   phase: Phase;
   phaseName: string;
@@ -62,6 +79,7 @@ export type PlayerView = {
   timerEndsAt?: number;
   team: { id: string; name: string; teammates: TeammateView[] } | null;
   teammates: TeammateView[];
+  teamChat: ChatMessageView[];
   waitingForNextRound?: boolean;
   lobby?: {
     players: Array<{
@@ -88,9 +106,8 @@ export type PlayerView = {
   reveal?: {
     teamName: string;
     composition: AssembledSegment[];
-    visibleSegments: AssembledSegment[];
+    visibleSegments: RevealSegmentView[];
     attribution?: string;
-    bursts: { emoji: string }[];
   };
   voting?: { teams: { id: string; name: string }[] };
   /** True once regulation rounds ended in a tie and the game moved into
@@ -142,28 +159,36 @@ export type RoomCommands = {
   createRoom: (
     actor: Actor,
     input: { displayName: string },
-  ) => { roomCode: string; url: string };
-  joinRoom: (actor: Actor, input: { code: string; displayName: string }) => void;
-  getPlayerView: (actor: Actor, roomCode: string) => PlayerView;
-  getHostView: (actor: Actor, roomCode: string) => HostView;
-  heartbeat: (actor: Actor, roomCode: string) => void;
-  setReady: (actor: Actor, roomCode: string, ready: boolean) => void;
-  shuffleTeams: (actor: Actor, roomCode: string) => void;
+  ) => Promise<{ roomCode: string; url: string }>;
+  joinRoom: (actor: Actor, input: { code: string; displayName: string }) => Promise<void>;
+  getPlayerView: (actor: Actor, roomCode: string) => Promise<PlayerView>;
+  getHostView: (actor: Actor, roomCode: string) => Promise<HostView>;
+  heartbeat: (actor: Actor, roomCode: string) => Promise<void>;
+  setReady: (actor: Actor, roomCode: string, ready: boolean) => Promise<void>;
+  shuffleTeams: (actor: Actor, roomCode: string) => Promise<void>;
   movePlayer: (
     actor: Actor,
     roomCode: string,
     playerId: string,
     teamId: string | null,
-  ) => void;
-  startRound: (actor: Actor, roomCode: string) => void;
-  submitChoice: (actor: Actor, roomCode: string, optionId: string) => void;
-  pause: (actor: Actor, roomCode: string) => void;
-  resume: (actor: Actor, roomCode: string) => void;
-  endRound: (actor: Actor, roomCode: string) => void;
-  sendRevealReaction: (actor: Actor, roomCode: string, emoji: string) => void;
-  vote: (actor: Actor, roomCode: string, teamId: string) => void;
-  startNextRound: (actor: Actor, roomCode: string) => void;
-  endGame: (actor: Actor, roomCode: string) => void;
+  ) => Promise<void>;
+  startRound: (actor: Actor, roomCode: string) => Promise<void>;
+  submitChoice: (actor: Actor, roomCode: string, optionId: string) => Promise<void>;
+  sendTeamMessage: (actor: Actor, roomCode: string, body: string) => Promise<void>;
+  sendTeamEmoji: (actor: Actor, roomCode: string, emoji: string) => Promise<void>;
+  pause: (actor: Actor, roomCode: string) => Promise<void>;
+  resume: (actor: Actor, roomCode: string) => Promise<void>;
+  endRound: (actor: Actor, roomCode: string) => Promise<void>;
+  sendRevealReaction: (
+    actor: Actor,
+    roomCode: string,
+    emoji: string,
+    segmentIndex?: number,
+  ) => Promise<void>;
+  vote: (actor: Actor, roomCode: string, teamId: string) => Promise<void>;
+  startNextRound: (actor: Actor, roomCode: string) => Promise<void>;
+  endGame: (actor: Actor, roomCode: string) => Promise<void>;
+  restartGame: (actor: Actor, roomCode: string) => Promise<void>;
 };
 
 export type Clock = { now: () => number };
@@ -173,6 +198,7 @@ export type RoomCommandDeps = {
   clock: Clock;
   random: () => number;
   roomUrl: (code: string) => string;
+  store: import("@/lib/game/room-store").RoomStore;
   ai?: AiComposer;
   /** Fire-and-forget hook piggybacked on the client heartbeat poll — used to
    * periodically refresh the AI-generated prompt pool without a scheduler. */
