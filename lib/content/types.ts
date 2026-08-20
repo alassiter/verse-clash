@@ -4,6 +4,7 @@ export const GRAMMATICAL_ROLES = [
   "verb",
   "noun_phrase",
   "verb_phrase",
+  "connector",
 ] as const;
 
 export const SEMANTIC_CATEGORIES = [

@@ -1,26 +1,452 @@
 [
   {
     "id": "love-poem-unromantic",
-    "text": "Write a love poem about something completely unromantic.",
+    "text": "Write a verse of a love poem about something completely unromantic.",
     "tease": "Roses are red, this is not.",
     "formatHint": "love poem",
-    "compatibleTemplateIds": ["three-principles"],
+    "compatibleTemplateIds": [
+      "three-principles"
+    ],
     "workplaceSafe": true
   },
   {
     "id": "clueless-inspiration",
-    "text": "Give an inspirational speech from someone who has absolutely no idea what they're doing.",
+    "text": "Write a verse of a pep talk from someone who has absolutely no idea what they're doing.",
     "tease": "No plan. Incredible energy.",
-    "formatHint": "inspirational speech",
-    "compatibleTemplateIds": ["three-principles"],
+    "formatHint": "hype line",
+    "compatibleTemplateIds": [
+      "three-principles"
+    ],
     "workplaceSafe": true
   },
   {
     "id": "villain-final-words",
-    "text": "Write the final words of an overly dramatic villain.",
+    "text": "Write a verse of the villain's final, overly dramatic words before the credits roll.",
     "tease": "The monologue nobody asked for.",
-    "formatHint": "villain monologue",
-    "compatibleTemplateIds": ["three-principles"],
+    "formatHint": "villain's last line",
+    "compatibleTemplateIds": [
+      "three-principles"
+    ],
+    "workplaceSafe": true
+  },
+  {
+    "id": "warning-from-future",
+    "text": "Write a verse of a warning message sent back from the future.",
+    "tease": "It's already too late.",
+    "formatHint": "future warning",
+    "compatibleTemplateIds": [
+      "three-principles"
+    ],
+    "workplaceSafe": true
+  },
+  {
+    "id": "ridiculous-breakup",
+    "text": "Write a verse that ends a breakup between two completely ridiculous things.",
+    "tease": "It's not you, it's everything.",
+    "formatHint": "breakup line",
+    "compatibleTemplateIds": [
+      "three-principles"
+    ],
+    "workplaceSafe": true
+  },
+  {
+    "id": "worst-vacation",
+    "text": "Write a verse describing the vacation that ended in a small, avoidable international incident.",
+    "tease": "The embassy has questions.",
+    "formatHint": "vacation one-liner",
+    "compatibleTemplateIds": [
+      "three-principles"
+    ],
+    "workplaceSafe": true
+  },
+  {
+    "id": "unimportant-battle",
+    "text": "Write a verse of a battle cry before an incredibly unimportant battle.",
+    "tease": "History will barely remember this.",
+    "formatHint": "battle cry",
+    "compatibleTemplateIds": [
+      "three-principles"
+    ],
+    "workplaceSafe": true
+  },
+  {
+    "id": "surviving-monday",
+    "text": "Write a verse describing one especially brutal Monday morning, from someone who barely survived it.",
+    "tease": "They made it. Barely.",
+    "formatHint": "survivor's one-liner",
+    "compatibleTemplateIds": [
+      "three-principles"
+    ],
+    "workplaceSafe": true
+  },
+  {
+    "id": "worst-detective",
+    "text": "Write a verse of the case notes left behind by the world's worst detective.",
+    "tease": "The case remains unsolved. Obviously.",
+    "formatHint": "detective's note",
+    "compatibleTemplateIds": [
+      "three-principles"
+    ],
+    "workplaceSafe": true
+  },
+  {
+    "id": "mysterious-creature",
+    "text": "Write a verse describing a mysterious creature nobody should have discovered.",
+    "tease": "Some things should stay buried.",
+    "formatHint": "sighting report",
+    "compatibleTemplateIds": [
+      "three-principles"
+    ],
+    "workplaceSafe": true
+  },
+  {
+    "id": "unwanted-product-ad",
+    "text": "Write a verse advertising a product nobody asked for.",
+    "tease": "As seen on nowhere.",
+    "formatHint": "ad tagline",
+    "compatibleTemplateIds": [
+      "three-principles"
+    ],
+    "workplaceSafe": true
+  },
+  {
+    "id": "nonsense-prophecy",
+    "text": "Write a verse of a prophecy that sounds important but makes almost no sense.",
+    "tease": "The prophecy is very confident.",
+    "formatHint": "ancient prophecy",
+    "compatibleTemplateIds": [
+      "three-principles"
+    ],
+    "workplaceSafe": true
+  },
+  {
+    "id": "pirate-disappointing-crew",
+    "text": "Write a verse of a pirate captain's pep talk to a deeply disappointing crew.",
+    "tease": "Yo ho ho, sort of.",
+    "formatHint": "captain's pep line",
+    "compatibleTemplateIds": [
+      "three-principles"
+    ],
+    "workplaceSafe": true
+  },
+  {
+    "id": "strangest-school-day-one",
+    "text": "Write a verse describing the first day at the strangest school imaginable.",
+    "tease": "Orientation went sideways fast.",
+    "formatHint": "first-day one-liner",
+    "compatibleTemplateIds": [
+      "three-principles"
+    ],
+    "workplaceSafe": true
+  },
+  {
+    "id": "robot-romantic-confession",
+    "text": "Write a verse of a robot's romantic confession, trying very hard to understand love.",
+    "tease": "Love.exe is still loading.",
+    "formatHint": "robot's confession",
+    "compatibleTemplateIds": [
+      "three-principles"
+    ],
+    "workplaceSafe": true
+  },
+  {
+    "id": "terrible-fantasy-opening",
+    "text": "Write the opening verse of a terrible fantasy novel.",
+    "tease": "Chapter one. Brace yourself.",
+    "formatHint": "opening line",
+    "compatibleTemplateIds": [
+      "three-principles"
+    ],
+    "workplaceSafe": true
+  },
+  {
+    "id": "absurd-royal-law",
+    "text": "Write a verse of a royal decree announcing a completely absurd new law.",
+    "tease": "By royal decree, obviously.",
+    "formatHint": "royal decree",
+    "compatibleTemplateIds": [
+      "three-principles"
+    ],
+    "workplaceSafe": true
+  },
+  {
+    "id": "dinner-becomes-adventure",
+    "text": "Write a verse describing the moment a normal dinner suddenly becomes an epic adventure.",
+    "tease": "Pass the salt. And the sword.",
+    "formatHint": "dinner-gone-wild line",
+    "compatibleTemplateIds": [
+      "three-principles"
+    ],
+    "workplaceSafe": true
+  },
+  {
+    "id": "useless-achievement-poem",
+    "text": "Write a verse of a poem celebrating someone's greatest and most useless achievement.",
+    "tease": "An ode to doing something, sort of.",
+    "formatHint": "achievement poem",
+    "compatibleTemplateIds": [
+      "three-principles"
+    ],
+    "workplaceSafe": true
+  },
+  {
+    "id": "minor-emergency-announcement",
+    "text": "Write a verse of a dramatic emergency announcement about something extremely minor.",
+    "tease": "This is not a drill. Or is it?",
+    "formatHint": "emergency announcement",
+    "compatibleTemplateIds": [
+      "three-principles"
+    ],
+    "workplaceSafe": true
+  },
+  {
+    "id": "worst-superhero-origin",
+    "text": "Write a verse describing the origin story of the world's least impressive superhero.",
+    "tease": "Great power, mediocre responsibility.",
+    "formatHint": "origin one-liner",
+    "compatibleTemplateIds": [
+      "three-principles"
+    ],
+    "workplaceSafe": true
+  },
+  {
+    "id": "apology-note-pet",
+    "text": "Write a verse of an apology note from a pet who is not actually sorry.",
+    "tease": "Zero remorse, full confidence.",
+    "formatHint": "pet apology",
+    "compatibleTemplateIds": [
+      "three-principles"
+    ],
+    "workplaceSafe": true
+  },
+  {
+    "id": "bedtime-story-gone-wrong",
+    "text": "Write a verse where a bedtime story goes wildly off the rails.",
+    "tease": "Once upon a time, then chaos.",
+    "formatHint": "plot-twist line",
+    "compatibleTemplateIds": [
+      "three-principles"
+    ],
+    "workplaceSafe": true
+  },
+  {
+    "id": "motivational-poster-caption",
+    "text": "Write a verse for a motivational poster that gives genuinely bad advice.",
+    "tease": "Hang this in no office.",
+    "formatHint": "poster caption",
+    "compatibleTemplateIds": [
+      "three-principles"
+    ],
+    "workplaceSafe": true
+  },
+  {
+    "id": "time-capsule-message",
+    "text": "Write a verse sealed in a time capsule by someone with strange priorities.",
+    "tease": "The future is not ready.",
+    "formatHint": "time capsule note",
+    "compatibleTemplateIds": [
+      "three-principles"
+    ],
+    "workplaceSafe": true
+  },
+  {
+    "id": "customer-complaint-absurd",
+    "text": "Write a verse of a furious complaint filed against something that cannot legally be complained about.",
+    "tease": "Dear Sir or Madam Moon,",
+    "formatHint": "complaint one-liner",
+    "compatibleTemplateIds": [
+      "three-principles"
+    ],
+    "workplaceSafe": true
+  },
+  {
+    "id": "wedding-toast-stranger",
+    "text": "Write a verse of a wedding toast from someone who barely knows the couple.",
+    "tease": "To love, or something like it.",
+    "formatHint": "toast line",
+    "compatibleTemplateIds": [
+      "three-principles"
+    ],
+    "workplaceSafe": true
+  },
+  {
+    "id": "evil-lair-welcome-sign",
+    "text": "Write a verse for the welcome sign posted outside a supervillain's underwhelming lair.",
+    "tease": "Visitors must sign in. Please.",
+    "formatHint": "lair signage",
+    "compatibleTemplateIds": [
+      "three-principles"
+    ],
+    "workplaceSafe": true
+  },
+  {
+    "id": "job-interview-worst-answer",
+    "text": "Write a verse that's the worst possible answer to 'tell me about yourself' in a job interview.",
+    "tease": "Hired? Unlikely.",
+    "formatHint": "interview answer",
+    "compatibleTemplateIds": [
+      "three-principles"
+    ],
+    "workplaceSafe": true
+  },
+  {
+    "id": "ghost-haunting-review",
+    "text": "Write a verse of an online review left by a ghost about the house it haunts.",
+    "tease": "Two stars. Poor acoustics.",
+    "formatHint": "haunting review",
+    "compatibleTemplateIds": [
+      "three-principles"
+    ],
+    "workplaceSafe": true
+  },
+  {
+    "id": "underdog-sports-speech",
+    "text": "Write a verse of a pep talk for a team that is definitely going to lose.",
+    "tease": "Victory is not the point today.",
+    "formatHint": "pep talk line",
+    "compatibleTemplateIds": [
+      "three-principles"
+    ],
+    "workplaceSafe": true
+  },
+  {
+    "id": "alien-first-contact-report",
+    "text": "Write a verse of an alien's first field report after visiting Earth.",
+    "tease": "Recommend further observation. Or not.",
+    "formatHint": "field report line",
+    "compatibleTemplateIds": [
+      "three-principles"
+    ],
+    "workplaceSafe": true
+  },
+  {
+    "id": "world-record-pointless",
+    "text": "Write a verse announcing a newly set, completely pointless world record.",
+    "tease": "History will barely notice.",
+    "formatHint": "record announcement",
+    "compatibleTemplateIds": [
+      "three-principles"
+    ],
+    "workplaceSafe": true
+  },
+  {
+    "id": "fortune-cookie-ominous",
+    "text": "Write a verse for a fortune cookie message that is a little too ominous.",
+    "tease": "Bad news, good crunch.",
+    "formatHint": "fortune cookie",
+    "compatibleTemplateIds": [
+      "three-principles"
+    ],
+    "workplaceSafe": true
+  },
+  {
+    "id": "resignation-letter-dramatic",
+    "text": "Write a verse of an overly dramatic resignation letter over something minor.",
+    "tease": "Effective immediately, for no real reason.",
+    "formatHint": "resignation one-liner",
+    "compatibleTemplateIds": [
+      "three-principles"
+    ],
+    "workplaceSafe": true
+  },
+  {
+    "id": "museum-exhibit-plaque",
+    "text": "Write a verse for a museum plaque describing an exhibit nobody understands.",
+    "tease": "Do not touch. Please.",
+    "formatHint": "plaque line",
+    "compatibleTemplateIds": [
+      "three-principles"
+    ],
+    "workplaceSafe": true
+  },
+  {
+    "id": "weather-forecast-strange",
+    "text": "Write a verse of a weather forecast for a day when it rains something other than rain.",
+    "tease": "Bring an umbrella. A weird one.",
+    "formatHint": "weather forecast",
+    "compatibleTemplateIds": [
+      "three-principles"
+    ],
+    "workplaceSafe": true
+  },
+  {
+    "id": "birthday-card-awkward",
+    "text": "Write a verse for the inside of a birthday card, for someone whose exact age you're now too far in to ask.",
+    "tease": "Happy... several birthday.",
+    "formatHint": "birthday card",
+    "compatibleTemplateIds": [
+      "three-principles"
+    ],
+    "workplaceSafe": true
+  },
+  {
+    "id": "instruction-manual-confusing",
+    "text": "Write a verse that's step one of an instruction manual, and it immediately makes no sense.",
+    "tease": "Some assembly. Much confusion.",
+    "formatHint": "instruction step",
+    "compatibleTemplateIds": [
+      "three-principles"
+    ],
+    "workplaceSafe": true
+  },
+  {
+    "id": "epic-quest-mundane",
+    "text": "Write a verse that calls a hero to an epic quest with an incredibly mundane goal.",
+    "tease": "The fate of the world rests on this errand.",
+    "formatHint": "call to adventure",
+    "compatibleTemplateIds": [
+      "three-principles"
+    ],
+    "workplaceSafe": true
+  },
+  {
+    "id": "late-night-infomercial",
+    "text": "Write a verse pitching a late-night infomercial product nobody needs.",
+    "tease": "But wait, there's less.",
+    "formatHint": "infomercial tagline",
+    "compatibleTemplateIds": [
+      "three-principles"
+    ],
+    "workplaceSafe": true
+  },
+  {
+    "id": "retirement-speech-robot",
+    "text": "Write a verse of a toast at the retirement party for a robot who served faithfully for one afternoon.",
+    "tease": "Short career. Big feelings.",
+    "formatHint": "retirement toast line",
+    "compatibleTemplateIds": [
+      "three-principles"
+    ],
+    "workplaceSafe": true
+  },
+  {
+    "id": "lost-pet-flyer",
+    "text": "Write a verse for a lost pet flyer, for a pet with a very unusual description.",
+    "tease": "Please contact if seen. Or heard.",
+    "formatHint": "lost pet flyer",
+    "compatibleTemplateIds": [
+      "three-principles"
+    ],
+    "workplaceSafe": true
+  },
+  {
+    "id": "graduation-speech-underprepared",
+    "text": "Write a verse of a graduation speech from someone who forgot to prepare a graduation speech.",
+    "tease": "Wing it with dignity.",
+    "formatHint": "graduation one-liner",
+    "compatibleTemplateIds": [
+      "three-principles"
+    ],
+    "workplaceSafe": true
+  },
+  {
+    "id": "game-show-host-intro",
+    "text": "Write a verse a game show host uses to introduce the strangest game show ever aired.",
+    "tease": "Welcome, contestants, to something.",
+    "formatHint": "intro line",
+    "compatibleTemplateIds": [
+      "three-principles"
+    ],
     "workplaceSafe": true
   }
 ]

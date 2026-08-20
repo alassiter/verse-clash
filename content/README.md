@@ -4,6 +4,8 @@ Author prompts, templates, slots, words, and safety lists as JSON in this folder
 
 Work Safe is the only supported `contentMode`. Extra content modes must not be added here.
 
+**Redesign in progress.** Verse Clash is moving from this dealt-5-options/template model to a magnet-poetry pile/board — see [`../docs/redesign-concept.md`](../docs/redesign-concept.md) and [`../PLAN.md`](../PLAN.md). `words.json` and `prompts.json` below are already sized and shaped for that redesign (including the new `connector` role for filler/glue words). `templates.json`/`slots.json` and the deal-mix mechanism described further down are still what the *running code* uses today, pending the board-grammar decision in the redesign doc.
+
 ## Files
 
 | File | Purpose |
@@ -52,7 +54,7 @@ Static segments own articles, pronouns, prepositions, and punctuation. Players o
   id: string
   templateId: string
   playerLabel: string
-  grammaticalRole: "adjective" | "noun" | "verb" | "noun_phrase" | "verb_phrase"
+  grammaticalRole: "adjective" | "noun" | "verb" | "noun_phrase" | "verb_phrase" | "connector"
   semanticCategory: "object" | "animal" | "food" | "weather" | "office" | "fantasy" | "place" | "action" | "emotion" | "adjective" | "profession" | "abstract"
   tone: "neutral" | "sincere" | "dramatic" | "absurd"
   intensity: 1 | 2 | 3
@@ -80,11 +82,12 @@ Players see `playerLabel` plus five options. They do not see the template or nei
 {
   id: string
   text: string
-  grammaticalRole: "adjective" | "noun" | "verb" | "noun_phrase" | "verb_phrase"
+  grammaticalRole: "adjective" | "noun" | "verb" | "noun_phrase" | "verb_phrase" | "connector"
   semanticCategory: string
   tone: string
   intensity: 1 | 2 | 3
   chaos: number
+  rarity: "common" | "interesting" | "rare" | "wildcard"
   workplaceSafe: true
   bannedPairCategories?: string[]
   compatiblePromptIds?: string[]
@@ -92,6 +95,10 @@ Players see `playerLabel` plus five options. They do not see the template or nei
 ```
 
 `compatiblePromptIds` empty or omitted means the word can be dealt for every prompt.
+
+`connector` is for filler/glue words — articles, conjunctions, prepositions, auxiliary "be" verbs, demonstratives — that the old template owned as static text but that magnet poetry needs as real tiles players place themselves ("a," "the," "and," "but," "of," "is," "this," ...). Connector words use `semanticCategory` to say which kind: `determiner`, `demonstrative`, `conjunction`, `preposition`, or `auxiliary`. That subtype is what a future Sentence Structure checker (see the redesign doc §7) pattern-matches against to judge whether a team's board reads as a real sentence — no AI involved, just checking the sequence of tags.
+
+`rarity` is meant to drive how many copies of a word land in a pile once pile-based dealing exists — `common` words (mostly connectors) should end up plentiful, `wildcard` words scarce. That pile-generation mechanism isn't built yet; today `rarity` only feeds the deal-mix logic described below.
 
 ### Safety
 
@@ -103,7 +110,7 @@ Players see `playerLabel` plus five options. They do not see the template or nei
 }
 ```
 
-## Deal mix
+## Deal mix (current running code — superseded by the redesign's pile/board once built)
 
 At round start the server deals **5 options per seated player**:
 

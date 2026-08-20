@@ -21,18 +21,67 @@
       "absurd-royal-law",
       "dinner-becomes-adventure",
       "useless-achievement-poem",
-      "minor-emergency-announcement"
+      "minor-emergency-announcement",
+      "worst-superhero-origin",
+      "apology-note-pet",
+      "bedtime-story-gone-wrong",
+      "motivational-poster-caption",
+      "time-capsule-message",
+      "customer-complaint-absurd",
+      "wedding-toast-stranger",
+      "evil-lair-welcome-sign",
+      "job-interview-worst-answer",
+      "ghost-haunting-review",
+      "underdog-sports-speech",
+      "alien-first-contact-report",
+      "world-record-pointless",
+      "fortune-cookie-ominous",
+      "resignation-letter-dramatic",
+      "museum-exhibit-plaque",
+      "weather-forecast-strange",
+      "birthday-card-awkward",
+      "instruction-manual-confusing",
+      "epic-quest-mundane",
+      "late-night-infomercial",
+      "retirement-speech-robot",
+      "lost-pet-flyer",
+      "graduation-speech-underprepared",
+      "game-show-host-intro"
     ],
     "title": "Four words",
     "segments": [
-      { "type": "slot", "slotId": "principle-adj" },
-      { "type": "static", "text": ", " },
-      { "type": "slot", "slotId": "principle-noun" },
-      { "type": "static", "text": ", and " },
-      { "type": "slot", "slotId": "principle-phrase" },
-      { "type": "static", "text": " — to " },
-      { "type": "slot", "slotId": "principle-verb" },
-      { "type": "static", "text": "." }
+      {
+        "type": "slot",
+        "slotId": "principle-adj"
+      },
+      {
+        "type": "static",
+        "text": ", "
+      },
+      {
+        "type": "slot",
+        "slotId": "principle-noun"
+      },
+      {
+        "type": "static",
+        "text": ", and "
+      },
+      {
+        "type": "slot",
+        "slotId": "principle-phrase"
+      },
+      {
+        "type": "static",
+        "text": " \u2014 to "
+      },
+      {
+        "type": "slot",
+        "slotId": "principle-verb"
+      },
+      {
+        "type": "static",
+        "text": "."
+      }
     ]
   }
 ]

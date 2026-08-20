@@ -1,8 +1,10 @@
 # Verse Clash
 
-A remote party-game prototype for Round 1: hidden word choices, assembled workplace-safe compositions, a shared reveal, Crowd Favorite, and a light team tally.
+A remote party game: teams sift a shared pile of word tiles onto a team board, magnet-poetry style, then face off head-to-head with the room voting a winner, bracket-style across the whole session.
 
-The live game never calls an LLM. You author prompts, templates, and word banks under `content/`.
+This is a redesign in progress. [`docs/redesign-concept.md`](docs/redesign-concept.md) has the full design reasoning and open questions; [`PLAN.md`](PLAN.md) tracks what's actually built vs. still to build; [`CONTEXT.md`](CONTEXT.md) has the vocabulary. The word/prompt content pack has been updated for the redesign; the game loop itself still runs the older dealt-5-options/template flow until the rebuild lands.
+
+The live game never calls an LLM (once AI removal from the runtime lands — see `PLAN.md`). You author prompts and word banks under `content/`.
 
 ## Run locally
 
@@ -45,7 +47,7 @@ You can stop with Ctrl-C and re-run; it keeps values already in `.env.local`.
 
 ## Content packs
 
-See [`content/README.md`](content/README.md). A 2–4 player sample pack ships in `content/*.json`. Grow those files for a 44-player session (11 slots per template, larger word banks). Validate without a room:
+See [`content/README.md`](content/README.md). A 2–4 player sample pack ships in `content/*.json`. The word bank and prompt pack are already sized up for the redesign (1,600+ words including connector/filler tiles, 45 prompts); `templates.json`/`slots.json` are on hold pending the board-grammar decision in `docs/redesign-concept.md`. Validate without a room:
 
 ```bash
 npx vitest run tests/content
